@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import * as d3 from 'd3';
 // @ts-ignore
 import { geoEquirectangular } from 'd3-geo-projection';
-import { X, Menu, GripHorizontal } from 'lucide-react';
+import { X, Menu, GripHorizontal, Shirt, ShoppingBag, Crown, Layers, Footprints } from 'lucide-react';
 import { Feature, FeatureCollection, Geometry, GeoJsonProperties } from 'geojson';
 import * as topojson from 'topojson-client';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
@@ -102,18 +102,27 @@ const WorldMap = ({
   const [worldData, setWorldData] = useState<any>(null);
   // ズームレベルを内部で管理
   const [zoomLevel, setZoomLevel] = useState<number>(globalZoomScale || 1);
+  // データ読み込みエラーの状態
+  const [loadError, setLoadError] = useState<boolean>(false);
 
   // データの取得
   useEffect(() => {
     console.log("Fetching map data...");
     fetch('https://unpkg.com/world-atlas@2.0.2/countries-110m.json')
-      .then(response => response.json())
+      .then(response => {
+        if (!response.ok) {
+          throw new Error(`Network response was not ok: ${response.status}`);
+        }
+        return response.json();
+      })
       .then(data => {
         console.log("Map data loaded successfully");
         setWorldData(data);
+        setLoadError(false);
       })
       .catch(err => {
         console.error("Error loading map data:", err);
+        setLoadError(true);
       });
   }, []);
 
@@ -122,6 +131,7 @@ const WorldMap = ({
 
   // 地図の描画
   useEffect(() => {
+    if (loadError) return; // エラーがある場合は描画しない
     if (!worldData || !mapRef.current) return;
 
     console.log("Drawing map with zoom level:", zoomLevel);
@@ -194,6 +204,7 @@ const WorldMap = ({
               // イベントのバブリングと既定の動作を停止
               event.preventDefault();
               event.stopPropagation();
+              event.stopImmediatePropagation(); // 即時に伝播停止
               
               // 現在の変換状態を保存
               const currentTransform = mapTransformRef.current || globalMapTransform || d3.zoomIdentity;
@@ -209,10 +220,8 @@ const WorldMap = ({
                 onCountrySelect(d.properties.name);
               }
               
-              // 地図の位置を維持
-              setTimeout(() => {
-                svg.call(zoom.transform as any, currentTransform);
-              }, 10);
+              // ここでイベントをキャンセルすることで地図の移動を防止
+              return false;
             });
         }
         
@@ -247,6 +256,7 @@ const WorldMap = ({
               // イベントのバブリングと既定の動作を停止
               event.preventDefault();
               event.stopPropagation();
+              event.stopImmediatePropagation(); // 即時に伝播停止
               
               // 現在の変換状態を保存
               const currentTransform = mapTransformRef.current || globalMapTransform || d3.zoomIdentity;
@@ -266,10 +276,8 @@ const WorldMap = ({
               // 国の情報を表示
               onCountrySelect(d.name);
               
-              // 地図の位置を維持
-              setTimeout(() => {
-                svg.call(zoom.transform as any, currentTransform);
-              }, 10);
+              // ここでイベントをキャンセルすることで地図の移動を防止
+              return false;
             });
         }
         
@@ -284,24 +292,20 @@ const WorldMap = ({
           initialTransform = d3.zoomIdentity.scale(globalZoomScale).translate(initialTransform.x, initialTransform.y);
         }
         
+        // 国とピンのクリックイベントが地図を動かさないように設定
+        svg.selectAll("path.country, circle")
+           .on("mousedown", function(event) {
+             // mousedownイベントを停止して地図移動を防止
+             event.stopPropagation();
+             event.preventDefault();
+             event.stopImmediatePropagation();
+           });
+        
         // ズーム処理
-        const zoom = d3.zoom()
+        const zoom = d3.zoom<SVGSVGElement, unknown>()
           .scaleExtent([1, 8]) // ズームの範囲を設定
           .translateExtent([[-SCROLL_LIMIT, 0], [SCROLL_LIMIT, height]]) // 上下の移動を制限、左右は広げる
           .on("zoom", (event) => {
-            // クリックイベントの場合の処理
-            if (event.sourceEvent && event.sourceEvent.type === 'click') {
-              // 国やピンの要素がクリックされた場合はズーム処理をスキップ
-              const target = event.sourceEvent.target;
-              if (target && (
-                  (target.classList && target.classList.contains('country')) || 
-                  target.tagName === 'circle'
-                )) {
-                // クリックイベントでの地図移動を防止
-                return;
-              }
-            }
-            
             // 現在の変換状態を取得
             const transform = event.transform;
             
@@ -362,7 +366,7 @@ const WorldMap = ({
       window.removeEventListener('resize', handleResize);
       clearTimeout(resizeTimer); // タイマーをクリア
     };
-  }, [worldData, pins, onCountrySelect, selectedCountryName]);
+  }, [worldData, pins, onCountrySelect, selectedCountryName, zoomLevel, loadError]);
   
   return (
     <div 
@@ -370,23 +374,84 @@ const WorldMap = ({
       style={{
         width: '100%',
         height: '100%', // 高さを親コンテナに合わせる
-        backgroundColor: '#a6c6f2', // 海の色を元の青に戻す
+        backgroundColor: '#68a0e8', // 海の色をより鮮やかな青色に変更
         position: 'relative',
         overflow: 'hidden',
         borderRadius: '0',
-        boxShadow: 'none'
+        boxShadow: 'none',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center'
       }}
-    />
+    >
+      {loadError && (
+        <div style={{
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          textAlign: 'center',
+          padding: '20px'
+        }}>
+          <img 
+            src="/images/world-map-error.png" 
+            alt="Map data loading error" 
+            style={{ 
+              maxWidth: '100%', 
+              maxHeight: '200px',
+              marginBottom: '20px' 
+            }}
+          />
+          <div style={{
+            color: 'white',
+            fontSize: '18px',
+            fontWeight: 'bold',
+            marginBottom: '10px'
+          }}>
+            地図データの読み込みに失敗しました
+          </div>
+          <div style={{
+            color: 'white',
+            fontSize: '14px'
+          }}>
+            ネットワーク接続を確認し、ページを再読み込みしてください
+          </div>
+          <button
+            onClick={() => window.location.reload()}
+            style={{
+              marginTop: '20px',
+              padding: '10px 20px',
+              backgroundColor: 'white',
+              border: 'none',
+              borderRadius: '4px',
+              fontWeight: 'bold',
+              cursor: 'pointer'
+            }}
+          >
+            再読み込み
+          </button>
+        </div>
+      )}
+    </div>
   );
 };
 
 // ファッション画像のカテゴリー
 const fashionCategories = [
-  "Casual", "Formal", "Sports", "Street", "Outdoor", 
+  "アウター", "Formal", "Sports", "Street", "Outdoor", 
   "Vintage", "Mode", "Gothic", "Lolita", "Hip Hop",
   "Surf", "Military", "Trod", "Minimal", "Esnek",
   "Retro", "Punk", "Rock", "Garry", "Monoton"
 ];
+
+// ファッションアイテムのアイコンURL
+const fashionItemIcons = {
+  hat: "/images/hat.png", // 帽子アイコン
+  outer: "/images/autor.png", // アウターアイコン
+  inner: "/images/shrit.png", // インナーアイコン
+  bottoms: "/images/pants.png", // ボトムスアイコン
+  shoes: "/images/shoes.png" // 靴アイコン
+};
 
 // 全てのカテゴリーとサフィックスの組み合わせを使うように改良したタイトル生成関数
 const generateAllPossibleTitles = () => {
@@ -869,7 +934,7 @@ export default function Home() {
     
     // 初期値は0で、アニメーション用に3つのデータセットを準備
     const fashionCategories = [
-      { name: 'Casual', value: 0 },
+      { name: 'アウター', value: 0 },
       { name: 'Formal', value: 0 },
       { name: 'Sports', value: 0 },
       { name: 'Street', value: 0 },
@@ -885,19 +950,19 @@ export default function Home() {
     ];
 
     const womenFashionCategories = [
-      { name: 'Dresses', value: 0 },
-      { name: 'Skirts', value: 0 },
-      { name: 'Pants', value: 0 },
-      { name: 'Blouses', value: 0 },
-      { name: 'Accessories', value: 0 }
+      { name: '帽子', value: 0 },
+      { name: 'アウター', value: 0 },
+      { name: 'インナー', value: 0 },
+      { name: 'ボトムス', value: 0 },
+      { name: '靴', value: 0 }
     ];
 
     const menFashionCategories = [
-      { name: 'Suits', value: 0 },
-      { name: 'Casual', value: 0 },
-      { name: 'Leather Shoes', value: 0 },
-      { name: 'Sneakers', value: 0 },
-      { name: 'Outerwear', value: 0 }
+      { name: '帽子', value: 0 },
+      { name: 'アウター', value: 0 },
+      { name: 'インナー', value: 0 },
+      { name: 'ボトムス', value: 0 },
+      { name: '靴', value: 0 }
     ];
 
     // 天気のランダム設定
@@ -946,7 +1011,7 @@ export default function Home() {
       
       // 実際の値を設定（アニメーション効果用）- 3つのデータセットをアップデート
       const updatedFashionData = [
-        { name: 'Casual', value: Math.floor(Math.random() * 100) },
+        { name: 'アウター', value: Math.floor(Math.random() * 100) },
         { name: 'Formal', value: Math.floor(Math.random() * 100) },
         { name: 'Sports', value: Math.floor(Math.random() * 100) },
         { name: 'Street', value: Math.floor(Math.random() * 100) },
@@ -971,19 +1036,19 @@ export default function Home() {
       ];
 
       const updatedWomenFashionData = [
-        { name: 'Dresses', value: Math.floor(Math.random() * 100) },
-        { name: 'Skirts', value: Math.floor(Math.random() * 100) },
-        { name: 'Pants', value: Math.floor(Math.random() * 100) },
-        { name: 'Blouses', value: Math.floor(Math.random() * 100) },
-        { name: 'Accessories', value: Math.floor(Math.random() * 100) }
+        { name: 'Hat', value: Math.floor(Math.random() * 100) },
+        { name: 'Outer', value: Math.floor(Math.random() * 100) },
+        { name: 'Inner', value: Math.floor(Math.random() * 100) },
+        { name: 'Bottoms', value: Math.floor(Math.random() * 100) },
+        { name: 'Shoes', value: Math.floor(Math.random() * 100) }
       ];
 
       const updatedMenFashionData = [
-        { name: 'Suits', value: Math.floor(Math.random() * 100) },
-        { name: 'Casual', value: Math.floor(Math.random() * 100) },
-        { name: 'Leather Shoes', value: Math.floor(Math.random() * 100) },
-        { name: 'Sneakers', value: Math.floor(Math.random() * 100) },
-        { name: 'Outerwear', value: Math.floor(Math.random() * 100) }
+        { name: 'Hat', value: Math.floor(Math.random() * 100) },
+        { name: 'Outer', value: Math.floor(Math.random() * 100) },
+        { name: 'Inner', value: Math.floor(Math.random() * 100) },
+        { name: 'Bottoms', value: Math.floor(Math.random() * 100) },
+        { name: 'Shoes', value: Math.floor(Math.random() * 100) }
       ];
       
       // データを更新して、アニメーションを有効化
@@ -1047,9 +1112,10 @@ export default function Home() {
       margin: 0,
       padding: 0,
       overflow: 'auto',
-      backgroundColor: '#f0f8ff',
+      backgroundColor: '#ffffff',
       fontFamily: 'Arial, Helvetica, sans-serif',
       minHeight: '100vh',
+      border: 'none', // 枠を表示しない
     }}>
       <div className="content-container" style={{
         display: 'flex',
@@ -1064,27 +1130,211 @@ export default function Home() {
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
-          justifyContent: 'flex-start',
-          paddingTop: '10px',
+          paddingTop: '15px',
+          paddingBottom: '15px',
           zIndex: 20,
           position: 'fixed',
           left: 0,
           top: 0,
-          bottom: 0
+          bottom: 0,
+          boxShadow: '2px 0 10px rgba(0, 0, 0, 0.1)'
         }}>
-          <button 
-            onClick={toggleNavbar}
-          style={{
-              background: 'none',
-              border: 'none',
-              color: '#333',
-              fontSize: '20px',
-              cursor: 'pointer',
-              marginTop: '10px'
-            }}
-          >
-            <Menu size={24} />
-          </button>
+          {/* 上部アイコン群 */}
+          <div style={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            width: '100%'
+          }}>
+            {/* ロゴ */}
+            <button 
+              onClick={toggleNavbar}
+              style={{
+                background: 'none',
+                border: 'none',
+                color: '#333',
+                cursor: 'pointer',
+                padding: '10px',
+                marginBottom: '25px'
+              }}
+            >
+              <img src="/images/logo.png" alt="Logo" width="40" height="40" />
+            </button>
+            
+            {/* コンパスアイコン - ナビゲーション */}
+            <button 
+              style={{
+                background: 'none',
+                border: 'none',
+                color: '#333',
+                cursor: 'pointer',
+                margin: '10px 0',
+                padding: '8px',
+                borderRadius: '8px',
+                transition: 'background-color 0.2s'
+              }}
+              onMouseEnter={(e) => {
+                // @ts-ignore
+                e.currentTarget.style.backgroundColor = '#f0f0f0';
+              }}
+              onMouseLeave={(e) => {
+                // @ts-ignore
+                e.currentTarget.style.backgroundColor = 'transparent';
+              }}
+            >
+              <img src="/images/search.png" alt="Navigation" width="30" height="30" />
+            </button>
+            
+            {/* プラスアイコン - 新規作成 */}
+            <button 
+              style={{
+                background: 'none',
+                border: 'none',
+                color: '#333',
+                cursor: 'pointer',
+                margin: '10px 0',
+                padding: '8px',
+                borderRadius: '8px',
+                transition: 'background-color 0.2s'
+              }}
+              onMouseEnter={(e) => {
+                // @ts-ignore
+                e.currentTarget.style.backgroundColor = '#f0f0f0';
+              }}
+              onMouseLeave={(e) => {
+                // @ts-ignore
+                e.currentTarget.style.backgroundColor = 'transparent';
+              }}
+            >
+              <img src="/images/plus.png" alt="Create New" width="30" height="30" />
+            </button>
+            
+            {/* ベルアイコン - 通知 */}
+            <button 
+              style={{
+                background: 'none',
+                border: 'none',
+                color: '#333',
+                cursor: 'pointer',
+                margin: '10px 0',
+                padding: '8px',
+                borderRadius: '8px',
+                transition: 'background-color 0.2s',
+                position: 'relative'
+              }}
+              onMouseEnter={(e) => {
+                // @ts-ignore
+                e.currentTarget.style.backgroundColor = '#f0f0f0';
+              }}
+              onMouseLeave={(e) => {
+                // @ts-ignore
+                e.currentTarget.style.backgroundColor = 'transparent';
+              }}
+            >
+              <img src="/images/bell.png" alt="Notifications" width="30" height="30" />
+              {/* 通知数表示 */}
+              <span style={{
+                position: 'absolute',
+                top: '5px',
+                right: '5px',
+                background: '#ff4757',
+                color: 'white',
+                borderRadius: '50%',
+                width: '18px',
+                height: '18px',
+                fontSize: '10px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontWeight: 'bold'
+              }}>3</span>
+            </button>
+            
+            {/* コメントアイコン - メッセージ */}
+            <button 
+              style={{
+                background: 'none',
+                border: 'none',
+                color: '#333',
+                cursor: 'pointer',
+                margin: '10px 0',
+                padding: '8px',
+                borderRadius: '8px',
+                transition: 'background-color 0.2s'
+              }}
+              onMouseEnter={(e) => {
+                // @ts-ignore
+                e.currentTarget.style.backgroundColor = '#f0f0f0';
+              }}
+              onMouseLeave={(e) => {
+                // @ts-ignore
+                e.currentTarget.style.backgroundColor = 'transparent';
+              }}
+            >
+              <img src="/images/search.png" alt="Messages" width="30" height="30" />
+            </button>
+          </div>
+          
+          {/* 設定アイコン - 下部固定 */}
+          <div style={{
+            marginTop: 'auto',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center'
+          }}>
+            {/* 設定アイコン - ユーザーアイコンの下に配置 */}
+            <button 
+              style={{
+                background: 'none',
+                border: 'none',
+                color: '#333',
+                cursor: 'pointer',
+                padding: '8px',
+                borderRadius: '8px',
+                transition: 'background-color 0.2s',
+                marginBottom: '10px',
+                display: 'flex',
+                justifyContent: 'center',
+                width: '100%'
+              }}
+              onMouseEnter={(e) => {
+                // @ts-ignore
+                e.currentTarget.style.backgroundColor = '#f0f0f0';
+              }}
+              onMouseLeave={(e) => {
+                // @ts-ignore
+                e.currentTarget.style.backgroundColor = 'transparent';
+              }}
+            >
+              <img src="/images/settings.png" alt="Settings" width="30" height="30" />
+            </button>
+
+            {/* ユーザーアイコン - 一番下に配置 */}
+            <button 
+              style={{
+                background: 'none',
+                border: 'none',
+                color: '#333',
+                cursor: 'pointer',
+                padding: '8px',
+                borderRadius: '8px',
+                transition: 'background-color 0.2s',
+                display: 'flex',
+                justifyContent: 'center',
+                width: '100%'
+              }}
+              onMouseEnter={(e) => {
+                // @ts-ignore
+                e.currentTarget.style.backgroundColor = '#f0f0f0';
+              }}
+              onMouseLeave={(e) => {
+                // @ts-ignore
+                e.currentTarget.style.backgroundColor = 'transparent';
+              }}
+            >
+              <img src="/images/user.png" alt="User" width="30" height="30" />
+            </button>
+          </div>
         </div>
 
         {/* メインエリア */}
@@ -1102,10 +1352,13 @@ export default function Home() {
             position: 'relative', 
             marginTop: '0px',
             paddingTop: '0px',
-            height: 'calc(100vh - 60px)', // 高さを画面サイズに合わせて調整
+            height: 'calc(100vh - 30px)', // 高さを調整して検索バーの中央あたりまで表示されるように
             width: '100%',
             borderTop: 'none',
-            backgroundColor: '#a6c6f2' // 背景色を元の青に戻す
+            backgroundColor: '#68a0e8', // 背景色をより鮮やかな青色に変更
+            marginBottom: '-30px', // 下部マージンをマイナスに設定して検索バーと重なるようにする
+            borderBottom: 'none', // 下部の境界線も削除
+            zIndex: 5 // 検索バーよりも下に表示されるように調整
           }}>
             <WorldMap 
               onCountrySelect={(name: string) => {
@@ -1119,7 +1372,6 @@ export default function Home() {
             {showPopup && selectedCountry && (
               <Draggable 
                 handle=".popup-handle, .popup-footer-handle"
-                bounds=".map-container" // 地図コンテナ内に制限
               >
                 <div style={{
                   position: 'absolute',
@@ -1152,7 +1404,8 @@ export default function Home() {
                         alt={`${selectedCountry.name} flag`}
                         style={{ 
                           width: '60px', 
-                          height: 'auto', 
+                          height: '40px', 
+                          objectFit: 'fill',
                           marginRight: '15px',
                           border: '1px solid #eee',
                           borderRadius: '3px',
@@ -1391,12 +1644,12 @@ export default function Home() {
                         fontWeight: 'bold',
                         textAlign: 'center'
                       }}>Women's</h3>
-                      <div style={{ height: isSmallScreen ? '160px' : '180px', width: '100%', overflow: 'visible' }}>
+                      <div style={{ height: isSmallScreen ? '200px' : '220px', width: '100%', overflow: 'visible' }}>
                         <ResponsiveContainer width="100%" height="100%">
                           <BarChart
                             data={selectedCountry.womenFashionData}
                             layout="vertical"
-                            margin={{ top: 5, right: 10, left: 5, bottom: 25 }}
+                            margin={{ top: 5, right: 10, left: 5, bottom: 15 }}
                           >
                             <CartesianGrid strokeDasharray="5 5" stroke="#f0f0f0" />
                             <XAxis 
@@ -1410,9 +1663,33 @@ export default function Home() {
                             <YAxis 
                               type="category" 
                               dataKey="name" 
-                              width={isSmallScreen ? 55 : 60}
-                              fontSize={isSmallScreen ? 10 : 11}
-                              tickMargin={5}
+                              width={isSmallScreen ? 45 : 50}
+                              fontSize={isSmallScreen ? 8 : 9}
+                              tickMargin={3}
+                              tick={(props) => {
+                                const { x, y, payload } = props;
+                                // アイコンのマッピング
+                                let iconUrl = "";
+                                switch(payload.value) {
+                                  case 'Hat': iconUrl = fashionItemIcons.hat; break;
+                                  case 'Outer': iconUrl = fashionItemIcons.outer; break;
+                                  case 'Inner': iconUrl = fashionItemIcons.inner; break;
+                                  case 'Bottoms': iconUrl = fashionItemIcons.bottoms; break;
+                                  case 'Shoes': iconUrl = fashionItemIcons.shoes; break;
+                                  default: iconUrl = "";
+                                }
+                                return (
+                                  <g transform={`translate(${x},${y})`}>
+                                    <image 
+                                      x={-35} 
+                                      y={-10} 
+                                      width={20} 
+                                      height={20} 
+                                      xlinkHref={iconUrl} 
+                                    />
+                                  </g>
+                                );
+                              }}
                             />
                             <Tooltip 
                               formatter={(value) => [`${value}%`, '']} 
@@ -1434,11 +1711,11 @@ export default function Home() {
                               animationBegin={0}
                               isAnimationActive={true}
                               radius={[0, 4, 4, 0]}
-                              barSize={24}
+                              barSize={18}
                               label={{
                                 position: 'insideRight',
                                 fill: '#fff',
-                                fontSize: 11,
+                                fontSize: 10,
                                 fontWeight: 'bold',
                                 formatter: (value: number) => `${value}%`
                               }}
@@ -1460,12 +1737,12 @@ export default function Home() {
                         fontWeight: 'bold',
                         textAlign: 'center'
                       }}>Men's</h3>
-                      <div style={{ height: isSmallScreen ? '160px' : '180px', width: '100%', overflow: 'visible' }}>
+                      <div style={{ height: isSmallScreen ? '200px' : '220px', width: '100%', overflow: 'visible' }}>
                         <ResponsiveContainer width="100%" height="100%">
                           <BarChart
                             data={selectedCountry.menFashionData}
                             layout="vertical"
-                            margin={{ top: 5, right: 10, left: 5, bottom: 25 }}
+                            margin={{ top: 5, right: 10, left: 5, bottom: 15 }}
                           >
                             <CartesianGrid strokeDasharray="5 5" stroke="#f0f0f0" />
                             <XAxis 
@@ -1479,9 +1756,33 @@ export default function Home() {
                             <YAxis 
                               type="category" 
                               dataKey="name" 
-                              width={isSmallScreen ? 55 : 60}
-                              fontSize={isSmallScreen ? 10 : 11}
-                              tickMargin={5}
+                              width={isSmallScreen ? 45 : 50}
+                              fontSize={isSmallScreen ? 8 : 9}
+                              tickMargin={3}
+                              tick={(props) => {
+                                const { x, y, payload } = props;
+                                // アイコンのマッピング
+                                let iconUrl = "";
+                                switch(payload.value) {
+                                  case 'Hat': iconUrl = fashionItemIcons.hat; break;
+                                  case 'Outer': iconUrl = fashionItemIcons.outer; break;
+                                  case 'Inner': iconUrl = fashionItemIcons.inner; break;
+                                  case 'Bottoms': iconUrl = fashionItemIcons.bottoms; break;
+                                  case 'Shoes': iconUrl = fashionItemIcons.shoes; break;
+                                  default: iconUrl = "";
+                                }
+                                return (
+                                  <g transform={`translate(${x},${y})`}>
+                                    <image 
+                                      x={-35} 
+                                      y={-10} 
+                                      width={20} 
+                                      height={20} 
+                                      xlinkHref={iconUrl} 
+                                    />
+                                  </g>
+                                );
+                              }}
                             />
                             <Tooltip 
                               formatter={(value) => [`${value}%`, '']} 
@@ -1503,11 +1804,11 @@ export default function Home() {
                               animationBegin={0}
                               isAnimationActive={true}
                               radius={[0, 4, 4, 0]}
-                              barSize={24}
+                              barSize={18}
                               label={{
                                 position: 'insideRight',
                                 fill: '#fff',
-                                fontSize: 11,
+                                fontSize: 10,
                                 fontWeight: 'bold',
                                 formatter: (value: number) => `${value}%`
                               }}
@@ -1535,27 +1836,276 @@ export default function Home() {
             )}
           </div>
           
+          {/* 検索バー */}
+          <div style={{
+            width: '100%',
+            backgroundColor: 'white',
+            padding: '15px 20px',
+            borderTop: 'none',
+            borderBottom: 'none',
+            display: 'flex',
+            justifyContent: 'flex-start', // 中央揃えから左揃えに変更
+            boxShadow: 'none',
+            position: 'relative',
+            zIndex: 10,
+            marginTop: '-15px' // -40pxから-15pxに変更して少し下に移動
+          }}>
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              width: '100%',
+              position: 'relative'
+            }}>
+              {/* 検索フォーム */}
+              <div style={{
+                position: 'relative',
+                width: '40%', // 幅を40%に制限
+                minWidth: '300px',
+                marginLeft: '10px' // サイドバーから少し離す
+              }}>
+                <input 
+                  type="text"
+                  placeholder="ファッションアイテム、カテゴリー、国名などで検索..."
+                  style={{
+                    width: '100%',
+                    padding: '12px 20px 12px 45px',
+                    fontSize: '14px',
+                    border: '1px solid #e0e0e0',
+                    borderRadius: '30px',
+                    outline: 'none',
+                    boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
+                    transition: 'border-color 0.2s, box-shadow 0.2s'
+                  }}
+                  onFocus={(e) => {
+                    // @ts-ignore
+                    e.target.style.borderColor = '#3b82f6';
+                    // @ts-ignore
+                    e.target.style.boxShadow = '0 1px 6px rgba(59, 130, 246, 0.3)';
+                  }}
+                  onBlur={(e) => {
+                    // @ts-ignore
+                    e.target.style.borderColor = '#e0e0e0';
+                    // @ts-ignore
+                    e.target.style.boxShadow = '0 1px 3px rgba(0, 0, 0, 0.1)';
+                  }}
+                />
+                {/* 検索アイコン */}
+                <div style={{
+                  position: 'absolute',
+                  left: '15px',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#3b82f6'
+                }}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="11" cy="11" r="8"></circle>
+                    <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                  </svg>
+                </div>
+                {/* 検索ボタン */}
+                <button style={{
+                  position: 'absolute',
+                  right: '5px',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  backgroundColor: '#3b82f6',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '20px',
+                  padding: '8px 20px',
+                  fontSize: '14px',
+                  cursor: 'pointer',
+                  transition: 'background-color 0.2s'
+                }}
+                onMouseEnter={(e) => {
+                  // @ts-ignore
+                  e.currentTarget.style.backgroundColor = '#2563eb';
+                }}
+                onMouseLeave={(e) => {
+                  // @ts-ignore
+                  e.currentTarget.style.backgroundColor = '#3b82f6';
+                }}
+                >
+                  検索
+                </button>
+              </div>
+              
+              {/* ファッションアイテムカテゴリボタン */}
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                marginLeft: '20px',
+                gap: '10px',
+                flexWrap: 'wrap'
+              }}>
+                <button style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  padding: '8px 15px',
+                  backgroundColor: 'white',
+                  border: '1px solid #e0e0e0',
+                  borderRadius: '20px',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s',
+                  gap: '5px'
+                }}
+                onMouseEnter={(e) => {
+                  // @ts-ignore
+                  e.currentTarget.style.boxShadow = '0 2px 8px rgba(59, 130, 246, 0.2)';
+                  // @ts-ignore
+                  e.currentTarget.style.borderColor = '#bfdbfe';
+                }}
+                onMouseLeave={(e) => {
+                  // @ts-ignore
+                  e.currentTarget.style.boxShadow = 'none';
+                  // @ts-ignore
+                  e.currentTarget.style.borderColor = '#e0e0e0';
+                }}
+                >
+                  <img src="/images/hat.png" alt="帽子" width="20" height="20" />
+                  <span>帽子</span>
+                </button>
+                
+                <button style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  padding: '8px 15px',
+                  backgroundColor: 'white',
+                  border: '1px solid #e0e0e0',
+                  borderRadius: '20px',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s',
+                  gap: '5px'
+                }}
+                onMouseEnter={(e) => {
+                  // @ts-ignore
+                  e.currentTarget.style.boxShadow = '0 2px 8px rgba(59, 130, 246, 0.2)';
+                  // @ts-ignore
+                  e.currentTarget.style.borderColor = '#bfdbfe';
+                }}
+                onMouseLeave={(e) => {
+                  // @ts-ignore
+                  e.currentTarget.style.boxShadow = 'none';
+                  // @ts-ignore
+                  e.currentTarget.style.borderColor = '#e0e0e0';
+                }}
+                >
+                  <img src="/images/autor.png" alt="アウター" width="20" height="20" />
+                  <span>アウター</span>
+                </button>
+                
+                <button style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  padding: '8px 15px',
+                  backgroundColor: 'white',
+                  border: '1px solid #e0e0e0',
+                  borderRadius: '20px',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s',
+                  gap: '5px'
+                }}
+                onMouseEnter={(e) => {
+                  // @ts-ignore
+                  e.currentTarget.style.boxShadow = '0 2px 8px rgba(59, 130, 246, 0.2)';
+                  // @ts-ignore
+                  e.currentTarget.style.borderColor = '#bfdbfe';
+                }}
+                onMouseLeave={(e) => {
+                  // @ts-ignore
+                  e.currentTarget.style.boxShadow = 'none';
+                  // @ts-ignore
+                  e.currentTarget.style.borderColor = '#e0e0e0';
+                }}
+                >
+                  <img src="/images/shrit.png" alt="インナー" width="20" height="20" />
+                  <span>インナー</span>
+                </button>
+                
+                <button style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  padding: '8px 15px',
+                  backgroundColor: 'white',
+                  border: '1px solid #e0e0e0',
+                  borderRadius: '20px',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s',
+                  gap: '5px'
+                }}
+                onMouseEnter={(e) => {
+                  // @ts-ignore
+                  e.currentTarget.style.boxShadow = '0 2px 8px rgba(59, 130, 246, 0.2)';
+                  // @ts-ignore
+                  e.currentTarget.style.borderColor = '#bfdbfe';
+                }}
+                onMouseLeave={(e) => {
+                  // @ts-ignore
+                  e.currentTarget.style.boxShadow = 'none';
+                  // @ts-ignore
+                  e.currentTarget.style.borderColor = '#e0e0e0';
+                }}
+                >
+                  <img src="/images/pants.png" alt="ボトムス" width="20" height="20" />
+                  <span>ボトムス</span>
+                </button>
+                
+                <button style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  padding: '8px 15px',
+                  backgroundColor: 'white',
+                  border: '1px solid #e0e0e0',
+                  borderRadius: '20px',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s',
+                  gap: '5px'
+                }}
+                onMouseEnter={(e) => {
+                  // @ts-ignore
+                  e.currentTarget.style.boxShadow = '0 2px 8px rgba(59, 130, 246, 0.2)';
+                  // @ts-ignore
+                  e.currentTarget.style.borderColor = '#bfdbfe';
+                }}
+                onMouseLeave={(e) => {
+                  // @ts-ignore
+                  e.currentTarget.style.boxShadow = 'none';
+                  // @ts-ignore
+                  e.currentTarget.style.borderColor = '#e0e0e0';
+                }}
+                >
+                  <img src="/images/shoes.png" alt="靴" width="20" height="20" />
+                  <span>靴</span>
+                </button>
+              </div>
+            </div>
+          </div>
+          
           {/* 画像ギャラリー */}
           <div style={{
             width: '100%',
-            backgroundColor: 'rgba(255, 255, 255, 0.9)',
+            backgroundColor: 'white', // 完全な白に変更
             padding: '20px',
-            borderTop: '1px solid #ddd',
-            marginTop: '20px'
+            borderTop: 'none', // 上部の境界線を削除
+            marginTop: '-30px' // 0pxから-30pxに変更して上に移動
           }}>
             {/* マンソリーレイアウト（不均一な高さの画像グリッド） */}
             <div style={{
               display: 'grid',
-              gridTemplateColumns: `repeat(auto-fill, minmax(${isSmallScreen ? '120px' : '150px'}, 1fr))`, // 画面サイズに応じて調整
+              gridTemplateColumns: `repeat(auto-fill, 5cm)`, // 横幅を5cmに固定
               gap: '15px',
-              margin: '0 auto'
+              margin: '0 auto',
+              justifyContent: 'center' // グリッドを中央揃えに
             }}>
               {FIXED_IMAGE_CARDS.map(card => (
             <div 
               key={card.id} 
                   style={{
-                    width: '100%', // 幅を100%に変更してレスポンシブに
-                    maxWidth: '188px', // 最大幅を設定
+                    width: '5cm', // 幅を5cmに固定
+                    // maxWidth削除 - 幅は5cmに固定
                     backgroundColor: 'white',
                     borderRadius: '8px',
                     boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
