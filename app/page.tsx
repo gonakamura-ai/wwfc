@@ -10,6 +10,35 @@ import * as topojson from 'topojson-client';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
 import Draggable from 'react-draggable';
 
+// カスタムフック: ウィンドウサイズを監視
+const useWindowSize = () => {
+  const [windowSize, setWindowSize] = useState({
+    width: typeof window !== 'undefined' ? window.innerWidth : 0,
+    height: typeof window !== 'undefined' ? window.innerHeight : 0,
+  });
+
+  useEffect(() => {
+    // ウィンドウのリサイズをハンドリング
+    const handleResize = () => {
+      setWindowSize({
+        width: window.innerWidth,
+        height: window.innerHeight,
+      });
+    };
+
+    // リスナーを追加
+    window.addEventListener('resize', handleResize);
+    
+    // 初期値設定
+    handleResize();
+    
+    // クリーンアップ
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  return windowSize;
+};
+
 // 型定義
 interface CountryData {
   id: string;
@@ -71,6 +100,8 @@ const WorldMap = ({
 }) => {
   const mapRef = useRef<HTMLDivElement>(null);
   const [worldData, setWorldData] = useState<any>(null);
+  // ズームレベルを内部で管理
+  const [zoomLevel, setZoomLevel] = useState<number>(globalZoomScale || 1);
 
   // データの取得
   useEffect(() => {
@@ -89,46 +120,43 @@ const WorldMap = ({
   // コンポーネント内でRef作成
   const mapTransformRef = useRef<any>(null);
 
-  // 地図の変換状態を保存するためのグローバル変数
-  let mapTransformState: any = null;
-
   // 地図の描画
   useEffect(() => {
     if (!worldData || !mapRef.current) return;
 
-    console.log("Drawing map with zoom level:", globalZoomScale);
+    console.log("Drawing map with zoom level:", zoomLevel);
     
     const drawMap = () => {
-    if (!mapRef.current) return;
-    
+      if (!mapRef.current) return;
+      
       // 既存のSVGをクリア
       mapRef.current.innerHTML = '';
       
       // コンテナのサイズを取得
-    const width = mapRef.current.clientWidth;
+      const width = mapRef.current.clientWidth;
       const height = mapRef.current.clientHeight;
 
       console.log(`Map container size: ${width}x${height}`);
 
       // SVG要素を作成
-    const svg = d3.select(mapRef.current)
-      .append("svg")
-      .attr("width", width)
-      .attr("height", height)
-      .attr("viewBox", `0 0 ${width} ${height}`)
-        .attr("preserveAspectRatio", "xMidYMid meet");
-      
-      // メインのグループ要素
-      const g = svg.append("g");
-      
-      // 投影法の設定 - グリーンランドが見えるようにスケールとオフセットを調整
-      const projection = d3.geoEquirectangular()
-        .scale(width / 7) // スケールを小さくしてより広い範囲を表示
-        .center([32, 10]) // 中心をグリーンランド付近に移動
-        .translate([width / 2, height / 2]); // 垂直方向のオフセットを調整
-      
-      // パスジェネレータ
-    const path = d3.geoPath().projection(projection);
+      const svg = d3.select(mapRef.current)
+        .append("svg")
+        .attr("width", width)
+        .attr("height", height)
+        .attr("viewBox", `0 0 ${width} ${height}`)
+          .attr("preserveAspectRatio", "xMidYMid meet");
+        
+        // メインのグループ要素
+        const g = svg.append("g");
+        
+        // 投影法の設定 - グリーンランドが見えるようにスケールとオフセットを調整
+        const projection = d3.geoEquirectangular()
+          .scale(width / 7) // スケールを小さくしてより広い範囲を表示
+          .center([32, 10]) // 中心をグリーンランド付近に移動
+          .translate([width / 2, height / 2]); // 垂直方向のオフセットを調整
+        
+        // パスジェネレータ
+      const path = d3.geoPath().projection(projection);
 
       try {
         // TopoJSONからGeoJSONに変換
@@ -277,6 +305,9 @@ const WorldMap = ({
             // 現在の変換状態を取得
             const transform = event.transform;
             
+            // ズームレベルを更新
+            setZoomLevel(transform.k);
+            
             // 変換状態をグローバルに保存
             mapTransformRef.current = transform;
             globalMapTransform = transform;
@@ -314,13 +345,23 @@ const WorldMap = ({
     // 地図を描画（常に実行）
     drawMap();
     
-    // リサイズハンドラーを設定
+    // リサイズハンドラーを設定 - デバウンス処理を追加
+    let resizeTimer: NodeJS.Timeout;
     const handleResize = () => {
-      drawMap();
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(() => {
+        if (mapRef.current) {
+          console.log("Resizing map...");
+          drawMap();
+        }
+      }, 200); // 200ms後に実行
     };
     
     window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      clearTimeout(resizeTimer); // タイマーをクリア
+    };
   }, [worldData, pins, onCountrySelect, selectedCountryName]);
   
   return (
@@ -328,7 +369,7 @@ const WorldMap = ({
       ref={mapRef} 
       style={{
         width: '100%',
-        height: '800px',
+        height: '100%', // 高さを親コンテナに合わせる
         backgroundColor: '#a6c6f2', // 海の色を元の青に戻す
         position: 'relative',
         overflow: 'hidden',
@@ -452,6 +493,11 @@ export default function Home() {
   const [animateChart, setAnimateChart] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
   
+  // ウィンドウサイズを取得
+  const windowSize = useWindowSize();
+  // 小さい画面かどうか - ブレークポイントを調整
+  const isSmallScreen = windowSize.width < 992; // 768px → 992pxに変更してより広い範囲をsmallとして扱う
+  
   // クライアントサイドでのみレンダリングされるようにするためのフラグ
   useEffect(() => {
     setIsMounted(true);
@@ -470,6 +516,9 @@ export default function Home() {
   const toggleNavbar = () => {
     setNavbarActive(!navbarActive);
   };
+
+  // この部分を追加：ESCキーハンドラーの参照を保持
+  const escKeyHandler = useRef<((e: KeyboardEvent) => void) | null>(null);
 
   // 国を選択した時の処理
   const selectCountry = (name: string) => {
@@ -874,6 +923,21 @@ export default function Home() {
     setSelectedCountry(countryData);
     setShowPopup(true);
     
+    // 既存のイベントリスナーを削除（前回のものがあれば）
+    if (escKeyHandler.current) {
+      document.removeEventListener('keydown', escKeyHandler.current);
+    }
+    
+    // 新しいハンドラーを作成して保存
+    escKeyHandler.current = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        closePopup();
+      }
+    };
+    
+    // 新しいハンドラーを追加
+    document.addEventListener('keydown', escKeyHandler.current);
+    
     // アニメーション用：少し遅延してからデータを更新
     // 2段階でアニメーションを行うために少し待つ
     setTimeout(() => {
@@ -946,6 +1010,12 @@ export default function Home() {
   // ポップアップを閉じる
   const closePopup = () => {
     setShowPopup(false);
+    
+    // ESCキーイベントリスナーを削除
+    if (escKeyHandler.current) {
+      document.removeEventListener('keydown', escKeyHandler.current);
+      escKeyHandler.current = null;
+    }
   };
 
   // この部分を追加：グラフコンポーネントのキーをリセットするために使用
@@ -1025,36 +1095,14 @@ export default function Home() {
           flexDirection: 'column',
           position: 'relative'
         }}>
-          {/* セクションタイトル - 地図 */}
-          <div style={{
-            backgroundColor: '#e6f0ff',
-            padding: '15px 20px 0 20px',
-            margin: '0',
-            width: '100%',
-            borderBottom: 'none'
-          }}>
-            <h2 style={{ 
-              fontSize: '36px',
-              fontWeight: '800',
-              margin: 0,
-              color: '#1a1a5c',
-              fontFamily: '"Playfair Display", "Times New Roman", serif',
-              letterSpacing: '1px',
-              textShadow: '2px 2px 4px rgba(0, 0, 0, 0.1)',
-              textTransform: 'capitalize',
-              backgroundImage: 'linear-gradient(45deg, #1a1a5c, #5050a5)',
-              WebkitBackgroundClip: 'text',
-              WebkitTextFillColor: 'transparent',
-              padding: '10px 0'
-            }}>World Wide Fashion Color</h2>
-      </div>
+          {/* セクションタイトル - 削除 */}
 
           {/* 地図コンテナ - マージン追加 */}
           <div className="map-container" style={{ 
             position: 'relative', 
             marginTop: '0px',
             paddingTop: '0px',
-            height: '800px',
+            height: 'calc(100vh - 60px)', // 高さを画面サイズに合わせて調整
             width: '100%',
             borderTop: 'none',
             backgroundColor: '#a6c6f2' // 背景色を元の青に戻す
@@ -1075,22 +1123,21 @@ export default function Home() {
               >
                 <div style={{
                   position: 'absolute',
-                  top: '150px', // 初期位置を地図の中央付近に
-                  left: '50%',
-                  transform: 'translateX(-50%)',
+                  top: '30px', // 上部からの距離を調整
+                  left: '30px', // 左からの距離を調整
                   backgroundColor: 'white',
                   borderRadius: '8px',
                   boxShadow: '0 5px 20px rgba(0, 0, 0, 0.2)',
-                  padding: '20px 20px 5px 20px', // 下部にパディングを減らす
-                  width: '90%',
-                  maxWidth: '1100px', // 最大幅を広げて横長に
-                  minWidth: '850px', // 最小幅をさらに広げて表示を確保
-                  height: 'auto', // 高さを自動調整
-                  minHeight: '400px',
-                  maxHeight: '550px', // 最大高さを制限して下に伸びないようにする
+                  padding: '15px',
+                  width: isSmallScreen ? 'calc(100% - 60px)' : '65%',
+                  maxWidth: '800px',
+                  minWidth: '300px',
+                  height: 'auto',
+                  minHeight: isSmallScreen ? '250px' : '350px',
+                  maxHeight: 'calc(100vh - 100px)',
                   zIndex: 30,
                   resize: 'both',
-                  overflow: 'visible' // スクロールを無効化
+                  overflow: 'visible'
                 }}>
                   <div className="popup-handle" style={{
                     display: 'flex',
@@ -1119,9 +1166,9 @@ export default function Home() {
                         color: '#333'
                       }}>{selectedCountry.name}</h2>
                     </div>
-            <button 
+                    <button 
                       onClick={closePopup}
-          style={{
+                      style={{
                         background: 'none',
                         border: 'none',
                         cursor: 'pointer',
@@ -1130,9 +1177,10 @@ export default function Home() {
                       }}
                     >
                       <X size={24} />
-            </button>
-          </div>
+                    </button>
+                  </div>
                   
+                  {/* 統計カード - 復元 */}
                   <div style={{
                     display: 'grid',
                     gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))',
@@ -1147,7 +1195,7 @@ export default function Home() {
                     }}>
                       <div style={{ fontWeight: 'bold', fontSize: '12px', color: '#666' }}>Popularity</div>
                       <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#333' }}>{selectedCountry.fashionPopularity}%</div>
-        </div>
+                    </div>
                     <div style={{
                       backgroundColor: '#e0e0e0',
                       padding: '10px',
@@ -1177,25 +1225,34 @@ export default function Home() {
                     </div>
                   </div>
                   
-                  {/* 3つのグラフを表示するセクション */}
+                  {/* 3つのグラフを表示するセクション - 3つ横並び */}
                   <div style={{ 
                     display: 'grid', 
-                    gridTemplateColumns: '1fr 1fr 1fr', // 3カラムの固定グリッドに変更
-                    gap: '20px',
-                    marginBottom: '20px',
-                    overflow: 'visible' // スクロールが発生しないようにする
+                    gridTemplateColumns: isSmallScreen ? '1fr' : '1fr 1fr 1fr', // 3つ横並び
+                    gap: isSmallScreen ? '10px' : '12px',
+                    marginBottom: '15px',
+                    marginTop: '5px',
+                    overflow: 'visible'
                   }}>
                     {/* カラー分析グラフ - 円グラフで表示 */}
                     <div>
                       <h3 style={{ 
-                        fontSize: '18px', 
-                        marginBottom: '10px',
+                        fontSize: '16px',
+                        marginBottom: '8px',
                         fontWeight: 'bold',
                         textAlign: 'center'
                       }}>Color</h3>
-                      <div style={{ height: '250px', width: '100%', overflow: 'visible' }}>
+                      <div style={{ 
+                        height: isSmallScreen ? '160px' : '180px', 
+                        width: '100%', 
+                        overflow: 'visible',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        justifyContent: 'center',
+                        alignItems: 'center'
+                      }}>
                         <ResponsiveContainer width="100%" height="100%">
-                          <PieChart margin={{ left: 30, right: 30, top: 10, bottom: 10 }}>
+                          <PieChart margin={{ left: isSmallScreen ? 5 : 10, right: isSmallScreen ? 5 : 10, top: 5, bottom: 10 }}>
                             <defs>
                               <linearGradient id="colorRedGradient" x1="0" y1="0" x2="1" y2="1">
                                 <stop offset="0%" stopColor="#FF6B6B" stopOpacity={0.9} />
@@ -1222,15 +1279,24 @@ export default function Home() {
                               key={`color-pie-${animationKey}`}
                               data={selectedCountry.colorData}
                               cx="50%"
-                              cy="50%"
-                              labelLine={{ stroke: '#999', strokeWidth: 1, strokeDasharray: '' }}
+                              cy="45%" // 少し上に配置して凡例のスペースを確保
+                              labelLine={isSmallScreen ? false : { stroke: '#999', strokeWidth: 1 }}
                               label={({ name, percent }) => {
-                                // 名前とパーセントを表示
-                                return `${name}: ${(percent * 100).toFixed(0)}%`;
+                                // パーセンテージが小さすぎる場合はラベルを表示しない
+                                if (percent < 0.05) return null;
+                                
+                                // 画面サイズに基づいてフォントサイズを調整
+                                const fontSize = isSmallScreen ? 8 : 
+                                                windowSize.width < 768 ? 9 : 
+                                                windowSize.width < 1024 ? 10 : 11;
+                                
+                                const value = (percent * 100).toFixed(0);
+                                // 値とカラー名両方を表示する
+                                return isSmallScreen ? `${value}%` : `${name}: ${value}%`;
                               }}
-                              outerRadius={68}
-                              innerRadius={35} // ドーナツグラフにする
-                              paddingAngle={3} // 各セグメント間の間隔
+                              outerRadius={isSmallScreen ? 38 : windowSize.width < 768 ? 44 : 48}
+                              innerRadius={isSmallScreen ? 18 : windowSize.width < 768 ? 24 : 28}
+                              paddingAngle={4} // セグメント間の間隔を少し大きく
                               dataKey="value"
                               animationDuration={1500}
                               animationBegin={100}
@@ -1238,6 +1304,7 @@ export default function Home() {
                               isAnimationActive={animateChart}
                               startAngle={90}
                               endAngle={-270}
+                              className="no-focus-outline" // CSSクラスを追加
                             >
                               {selectedCountry.colorData.map((entry, index) => {
                                 // 明るい色から少し暗い色へのグラデーション用のID
@@ -1285,6 +1352,7 @@ export default function Home() {
                                     fill={fillId}
                                     stroke={darkerColor}
                                     strokeWidth={0.5}
+                                    className="no-focus-outline" // CSSクラスを追加
                                   />
                                 );
                               })}
@@ -1295,10 +1363,20 @@ export default function Home() {
                                 borderRadius: '8px', 
                                 border: 'none', 
                                 boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-                                padding: '10px'
+                                padding: '8px'
                               }}
                               formatter={(value, name) => [`${value}%`, name]}
-                              itemStyle={{ color: '#333' }}
+                              itemStyle={{ color: '#333', fontSize: isSmallScreen ? '11px' : '12px' }}
+                            />
+                            <Legend 
+                              layout="horizontal" 
+                              verticalAlign="bottom" 
+                              align="center"
+                              wrapperStyle={{ 
+                                fontSize: isSmallScreen ? '9px' : '10px', 
+                                paddingTop: isSmallScreen ? '5px' : '10px',
+                                bottom: isSmallScreen ? '-5px' : '0px'
+                              }}
                             />
                           </PieChart>
                         </ResponsiveContainer>
@@ -1308,31 +1386,38 @@ export default function Home() {
                     {/* 女性ファッション分析グラフ */}
                     <div>
                       <h3 style={{ 
-                        fontSize: '18px', 
-                        marginBottom: '10px',
+                        fontSize: '16px',
+                        marginBottom: '8px',
                         fontWeight: 'bold',
                         textAlign: 'center'
                       }}>Women's</h3>
-                      <div style={{ height: '250px', width: '100%', overflow: 'visible' }}>
+                      <div style={{ height: isSmallScreen ? '160px' : '180px', width: '100%', overflow: 'visible' }}>
                         <ResponsiveContainer width="100%" height="100%">
                           <BarChart
                             data={selectedCountry.womenFashionData}
                             layout="vertical"
-                            margin={{ top: 5, right: 30, left: 20, bottom: 25 }}
+                            margin={{ top: 5, right: 10, left: 5, bottom: 25 }}
                           >
                             <CartesianGrid strokeDasharray="5 5" stroke="#f0f0f0" />
                             <XAxis 
                               type="number" 
                               domain={[0, 100]} 
                               ticks={[0, 25, 50, 75, 100]}
-                              height={40}
+                              height={30}
+                              tickFormatter={(value) => `${value}`}
+                              fontSize={isSmallScreen ? 9 : 10}
                             />
                             <YAxis 
                               type="category" 
                               dataKey="name" 
-                              width={80} 
+                              width={isSmallScreen ? 55 : 60}
+                              fontSize={isSmallScreen ? 10 : 11}
+                              tickMargin={5}
                             />
-                            <Tooltip />
+                            <Tooltip 
+                              formatter={(value) => [`${value}%`, '']} 
+                              contentStyle={{ fontSize: '12px', padding: '5px 8px' }} 
+                            />
                             <defs>
                               <linearGradient id="womenGradient" x1="0" y1="0" x2="1" y2="0">
                                 <stop offset="0%" stopColor="#6BCB77" stopOpacity={0.8} />
@@ -1349,10 +1434,11 @@ export default function Home() {
                               animationBegin={0}
                               isAnimationActive={true}
                               radius={[0, 4, 4, 0]}
+                              barSize={24}
                               label={{
                                 position: 'insideRight',
                                 fill: '#fff',
-                                fontSize: 12,
+                                fontSize: 11,
                                 fontWeight: 'bold',
                                 formatter: (value: number) => `${value}%`
                               }}
@@ -1369,31 +1455,38 @@ export default function Home() {
                     {/* 男性ファッション分析グラフ */}
                     <div>
                       <h3 style={{ 
-                        fontSize: '18px', 
-                        marginBottom: '10px',
+                        fontSize: '16px',
+                        marginBottom: '8px',
                         fontWeight: 'bold',
                         textAlign: 'center'
                       }}>Men's</h3>
-                      <div style={{ height: '250px', width: '100%', overflow: 'visible' }}>
+                      <div style={{ height: isSmallScreen ? '160px' : '180px', width: '100%', overflow: 'visible' }}>
                         <ResponsiveContainer width="100%" height="100%">
                           <BarChart
                             data={selectedCountry.menFashionData}
                             layout="vertical"
-                            margin={{ top: 5, right: 30, left: 20, bottom: 25 }}
+                            margin={{ top: 5, right: 10, left: 5, bottom: 25 }}
                           >
                             <CartesianGrid strokeDasharray="5 5" stroke="#f0f0f0" />
                             <XAxis 
                               type="number" 
                               domain={[0, 100]} 
                               ticks={[0, 25, 50, 75, 100]}
-                              height={40}
+                              height={30}
+                              tickFormatter={(value) => `${value}`}
+                              fontSize={isSmallScreen ? 9 : 10}
                             />
                             <YAxis 
                               type="category" 
                               dataKey="name" 
-                              width={80}
+                              width={isSmallScreen ? 55 : 60}
+                              fontSize={isSmallScreen ? 10 : 11}
+                              tickMargin={5}
                             />
-                            <Tooltip />
+                            <Tooltip 
+                              formatter={(value) => [`${value}%`, '']} 
+                              contentStyle={{ fontSize: '12px', padding: '5px 8px' }} 
+                            />
                             <defs>
                               <linearGradient id="menGradient" x1="0" y1="0" x2="1" y2="0">
                                 <stop offset="0%" stopColor="#6BCB77" stopOpacity={0.8} />
@@ -1410,10 +1503,11 @@ export default function Home() {
                               animationBegin={0}
                               isAnimationActive={true}
                               radius={[0, 4, 4, 0]}
+                              barSize={24}
                               label={{
                                 position: 'insideRight',
                                 fill: '#fff',
-                                fontSize: 12,
+                                fontSize: 11,
                                 fontWeight: 'bold',
                                 formatter: (value: number) => `${value}%`
                               }}
@@ -1452,7 +1546,7 @@ export default function Home() {
             {/* マンソリーレイアウト（不均一な高さの画像グリッド） */}
             <div style={{
               display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fill, minmax(188px, 1fr))',
+              gridTemplateColumns: `repeat(auto-fill, minmax(${isSmallScreen ? '120px' : '150px'}, 1fr))`, // 画面サイズに応じて調整
               gap: '15px',
               margin: '0 auto'
             }}>
@@ -1460,7 +1554,8 @@ export default function Home() {
             <div 
               key={card.id} 
                   style={{
-                    width: '188px', // 5cm固定幅に明示的に指定
+                    width: '100%', // 幅を100%に変更してレスポンシブに
+                    maxWidth: '188px', // 最大幅を設定
                     backgroundColor: 'white',
                     borderRadius: '8px',
                     boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
@@ -1530,6 +1625,53 @@ export default function Home() {
         
         * {
           box-sizing: border-box;
+        }
+        
+        /* スクロールバーのスタイリング */
+        ::-webkit-scrollbar {
+          width: 8px;
+          height: 8px;
+        }
+        
+        ::-webkit-scrollbar-track {
+          background: #f1f1f1;
+          border-radius: 10px;
+        }
+        
+        ::-webkit-scrollbar-thumb {
+          background: #888;
+          border-radius: 10px;
+        }
+        
+        ::-webkit-scrollbar-thumb:hover {
+          background: #555;
+        }
+        
+        /* 円グラフのクリックアウトラインを除去 */
+        .no-focus-outline {
+          outline: none !important;
+        }
+        
+        .recharts-sector:focus {
+          outline: none !important;
+        }
+        
+        .recharts-sector:active {
+          outline: none !important;
+        }
+        
+        .recharts-surface:focus {
+          outline: none !important;
+        }
+        
+        /* Rechartsの要素にfocusが当たらないようにする */
+        .recharts-wrapper {
+          outline: none !important;
+        }
+        
+        /* タブナビゲーション時のフォーカスインジケータも削除 */
+        *:focus {
+          outline: none !important;
         }
       `}</style>
     </div>
