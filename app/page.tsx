@@ -473,75 +473,120 @@ const generateAllPossibleTitles = () => {
 const generateImageCards = (): ImageCard[] => {
   const cards: ImageCard[] = [];
   
-  // 固定画像ソース (Unsplashの固定URLを使用)
-  const fashionImages = [
-    "https://images.unsplash.com/photo-1483985988355-763728e1935b?w=188&fit=crop",
-    "https://images.unsplash.com/photo-1445205170230-053b83016050?w=188&fit=crop",
-    "https://images.unsplash.com/photo-1485230895905-ec40ba36b9bc?w=188&fit=crop",
-    "https://images.unsplash.com/photo-1475180098004-ca77a66827be?w=188&fit=crop",
-    "https://images.unsplash.com/photo-1492707892479-7bc8d5a4ee93?w=188&fit=crop",
-    "https://images.unsplash.com/photo-1469334031218-e382a71b716b?w=188&fit=crop",
-    "https://images.unsplash.com/photo-1485968579580-b6d095142e6e?w=188&fit=crop",
-    "https://images.unsplash.com/photo-1496747611176-843222e1e57c?w=188&fit=crop",
-    "https://images.unsplash.com/photo-1485462537746-965f33f7f6a7?w=188&fit=crop",
-    "https://images.unsplash.com/photo-1479064555552-3ef4979f8908?w=188&fit=crop",
-    "https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?w=188&fit=crop",
-    "https://images.unsplash.com/photo-1554412933-514a83d2f3c8?w=188&fit=crop",
-    "https://images.unsplash.com/photo-1576566588028-4147f3842f27?w=188&fit=crop",
-    "https://images.unsplash.com/photo-1556905055-8f358a7a47b2?w=188&fit=crop",
-    "https://images.unsplash.com/photo-1587754568293-82a0317594dc?w=188&fit=crop",
-    "https://images.unsplash.com/photo-1500643752441-4dc90cda350a?w=188&fit=crop",
-    "https://images.unsplash.com/photo-1509631179647-0177331693ae?w=188&fit=crop",
-    "https://images.unsplash.com/photo-1517256673644-36ad11246d21?w=188&fit=crop",
-    "https://images.unsplash.com/photo-1558769132-cb1aea458c5e?w=188&fit=crop",
-    "https://images.unsplash.com/photo-1516762689617-e1cffcef479d?w=188&fit=crop"
+  // ギャラリー画像のパスを定義（100枚の異なる画像）
+  const galleryImages = [
+    "/images/gallery/包包_000045.jpg",
+    "/images/gallery/包包_000042.jpg",
+    "/images/gallery/バッグ_000006.jpg",
+    "/images/gallery/กระเป๋า_000031.jpg",
+    "/images/gallery/กระเป๋า_000011.jpg",
+    "/images/gallery/กระเป๋า_000001.jpg",
+    "/images/gallery/बैग_000070.jpg",
+    "/images/gallery/बैग_000062.jpg",
+    "/images/gallery/बैग_000022.jpg",
+    "/images/gallery/حقيبة_000085.jpg",
+    "/images/gallery/حقيبة_000028.jpg",
+    "/images/gallery/Сумка_000021.jpg",
+    "/images/gallery/Çanta_000004.jpg",
+    "/images/gallery/Túi xách_000051.jpg",
+    "/images/gallery/Túi xách_000031.jpg",
+    "/images/gallery/Tasche_000052.jpg",
+    "/images/gallery/Borsa_000014.jpg",
+    "/images/gallery/Bolsa_000052.jpg",
+    "/images/gallery/Bolsa_000029.jpg",
+    "/images/gallery/Bag_000055.jpg",
+    "/images/gallery/목도리_000058.jpg",
+    "/images/gallery/목도리_000024.jpg",
+    "/images/gallery/围巾_000043.jpg",
+    "/images/gallery/围巾_000033.jpg",
+    "/images/gallery/स्कार्फ़_000041.jpg",
+    "/images/gallery/स्कार्फ़_000019.jpg",
+    "/images/gallery/स्कार्फ़_000001.jpg",
+    "/images/gallery/وشاح_000032.jpg",
+    "/images/gallery/Шарф_000026.jpg",
+    "/images/gallery/Шарф_000020.jpg",
+    "/images/gallery/Шарф_000015.jpg",
+    "/images/gallery/Šála_000014.jpg",
+    "/images/gallery/Šála_000012.jpg",
+    "/images/gallery/Écharpe_000056.jpg",
+    "/images/gallery/Schal_000048.jpg",
+    "/images/gallery/Schal_000028.jpg",
+    "/images/gallery/Schal_000009.jpg",
+    "/images/gallery/Huivi_000005.jpg",
+    "/images/gallery/Halstørklæde_000032.jpg",
+    "/images/gallery/Bufanda_000037.jpg",
+    "/images/gallery/패딩_000037.jpg",
+    "/images/gallery/패딩_000026.jpg",
+    "/images/gallery/ダウンジャケット_000026.jpg",
+    "/images/gallery/डाउन जैकेट_000047.jpg",
+    "/images/gallery/Пуховик_000036.jpg",
+    "/images/gallery/Пуховик_000009.jpg",
+    "/images/gallery/Μπουφάν πούπουλο_000009.jpg",
+    "/images/gallery/Áo khoác lông vũ_000026.jpg",
+    "/images/gallery/Kurtka puchowa_000048.jpg",
+    "/images/gallery/Kurtka puchowa_000032.jpg",
+    "/images/gallery/Kaz tüyü mont_000057.jpg",
+    "/images/gallery/Jaqueta de pena_000027.jpg",
+    "/images/gallery/Giacca in piuma_000055.jpg",
+    "/images/gallery/Giacca in piuma_000033.jpg",
+    "/images/gallery/down_jackets_000070.jpg",
+    "/images/gallery/down_jackets_000032.jpg",
+    "/images/gallery/down_jackets_000010.jpg",
+    "/images/gallery/Doudoune_000023.jpg",
+    "/images/gallery/Donsjas_000050.jpg",
+    "/images/gallery/Donsjas_000020.jpg",
+    "/images/gallery/Daunenjacke_000046.jpg",
+    "/images/gallery/Chaqueta de plumas_000013.jpg",
+    "/images/gallery/재킷_000054.jpg",
+    "/images/gallery/新しいフォルダー_000043.jpg",
+    "/images/gallery/夹克_000014.jpg",
+    "/images/gallery/แจ็กเก็ต_000054.jpg",
+    "/images/gallery/Μπουφάν_000039.jpg",
+    "/images/gallery/Μπουφάν_000017.jpg",
+    "/images/gallery/Veste_000039.jpg",
+    "/images/gallery/Veste_000024.jpg",
+    "/images/gallery/Veste_000021.jpg",
+    "/images/gallery/Veste_000018.jpg",
+    "/images/gallery/Takki_000034.jpg",
+    "/images/gallery/Jas_000005.jpg",
+    "/images/gallery/Jakke_000020.jpg",
+    "/images/gallery/Jaket_000056.jpg",
+    "/images/gallery/Jaket_000048.jpg",
+    "/images/gallery/Jacket_000022.jpg",
+    "/images/gallery/Jacka_000043.jpg",
+    "/images/gallery/Jacka_000022.jpg",
+    "/images/gallery/Giacca_000004.jpg",
+    "/images/gallery/Chaqueta_000025.jpg",
+    "/images/gallery/大衣_000040.jpg",
+    "/images/gallery/コート_000001.jpg",
+    "/images/gallery/कोट_000013.jpg",
+    "/images/gallery/Rock_000050.jpg",
+    "/images/gallery/Rock_000021.jpg",
+    "/images/gallery/Płaszcz_000035.jpg",
+    "/images/gallery/Palto_000043.jpg",
+    "/images/gallery/Mantel_000020.jpg",
+    "/images/gallery/Manteau_000030.jpg",
+    "/images/gallery/Frakk_000030.jpg",
+    "/images/gallery/Coat_000027.jpg",
+    "/images/gallery/Coat_000020.jpg",
+    "/images/gallery/Coat_000011.jpg",
+    "/images/gallery/Cappotto_000029.jpg",
+    "/images/gallery/Abrigo_000036.jpg",
+    "/images/gallery/Abrigo_000015.jpg",
+    "/images/gallery/브라탑_000055.jpg"
   ];
+
+  // 画像をシャッフル
+  const shuffledImages = [...galleryImages].sort(() => Math.random() - 0.5);
   
-  // さらに画像URLを追加して重複を減らす
-  const additionalImages = [
-    "https://images.unsplash.com/photo-1551232864-3f0890e580d9?w=188&fit=crop",
-    "https://images.unsplash.com/photo-1542838686-37da4a9fd1b3?w=188&fit=crop",
-    "https://images.unsplash.com/photo-1550614000-4895a10e1bfd?w=188&fit=crop",
-    "https://images.unsplash.com/photo-1543087903-1ac2ec7aa8c5?w=188&fit=crop",
-    "https://images.unsplash.com/photo-1532453288009-a29217d06b56?w=188&fit=crop",
-    "https://images.unsplash.com/photo-1548826490-58de0a903cde?w=188&fit=crop",
-    "https://images.unsplash.com/photo-1573497019940-1c28c88b4f3e?w=188&fit=crop",
-    "https://images.unsplash.com/photo-1576674627305-05866b3d5f01?w=188&fit=crop",
-    "https://images.unsplash.com/photo-1595777457583-95e059d581b8?w=188&fit=crop",
-    "https://images.unsplash.com/photo-1536593998369-f0d25ed0fb1d?w=188&fit=crop"
-  ];
-  
-  // 全ての画像を結合
-  const allImages = [...fashionImages, ...additionalImages];
-  
-  // 画像の高さを変える値の配列（より縦長になるよう高さを増加）
-  const heights = [250, 300, 350, 280, 320, 270, 330, 290, 310, 340];
-  
-  // 全ての利用可能な画像をシャッフル
-  const shuffledImages = [...allImages].sort(() => Math.random() - 0.5);
-  
-  // すべての可能なタイトルを生成してシャッフル
-  const allTitles = generateAllPossibleTitles();
-  
-  // 100個のカードを生成
-  for (let i = 1; i <= 100; i++) {
-    // 使える画像数以内で繰り返すためのインデックス
-    const imageIndex = (i - 1) % shuffledImages.length;
-    // タイトルのインデックス (120種類のタイトルがある)
-    const titleIndex = (i - 1) % allTitles.length;
-    // シャッフルした画像配列から選択
-    const source = shuffledImages[imageIndex];
-    // シャッフルしたタイトル配列から選択
-    const title = allTitles[titleIndex];
-    // ランダムな高さを選択
-    const height = heights[Math.floor(Math.random() * heights.length)];
-    
+  // 100枚のカードを生成
+  for (let i = 0; i < 100; i++) {
     cards.push({
-      id: i,
-      src: source,
-      alt: title,
-      title: title,
-      height: height // 高さをバラバラに
+      id: i + 1,
+      src: shuffledImages[i],
+      alt: `Fashion Item ${i + 1}`,
+      title: "", // タイトルを空文字列に設定
+      height: 300 // 固定の高さを使用
     });
   }
   
