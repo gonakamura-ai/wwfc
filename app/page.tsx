@@ -2127,29 +2127,25 @@ export default function Home() {
             borderTop: 'none',
             marginTop: '-30px'
           }}>
-            {/* マソンリーレイアウト - columns-countを使用して列数を制御 */}
             <div style={{
-              columnCount: 4,
-              columnGap: '15px',
+              display: 'flex',
+              flexWrap: 'wrap',
+              gap: '15px',
               margin: '0 auto',
-              padding: '0 15px'
+              padding: '0 15px',
+              justifyContent: 'center'
             }}>
               {FIXED_IMAGE_CARDS.map(card => (
                 <div 
                   key={card.id} 
                   style={{
-                    width: '100%',
+                    flex: '0 1 300px',
                     backgroundColor: 'white',
                     borderRadius: '8px',
                     boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
                     overflow: 'hidden',
                     cursor: 'pointer',
-                    transition: 'transform 0.2s, box-shadow 0.2s',
-                    marginBottom: '15px',
-                    breakInside: 'avoid', // 要素が列をまたがないようにする
-                    WebkitColumnBreakInside: 'avoid', // Safari対応
-                    display: 'inline-block', // インラインブロック要素として表示
-                    width: '100%' // 列幅いっぱいに広げる
+                    transition: 'transform 0.2s, box-shadow 0.2s'
                   }}
                   onMouseEnter={(e) => {
                     // @ts-ignore
