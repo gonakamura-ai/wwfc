@@ -9,6 +9,7 @@ import { Feature, FeatureCollection, Geometry, GeoJsonProperties } from 'geojson
 import * as topojson from 'topojson-client';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
 import Draggable from 'react-draggable';
+import Masonry from 'react-masonry-css';
 
 // カスタムフック: ウィンドウサイズを監視
 const useWindowSize = () => {
