@@ -2136,57 +2136,43 @@ export default function Home() {
               justifyContent: 'center' // グリッドを中央揃えに
             }}>
               {FIXED_IMAGE_CARDS.map(card => (
-            <div 
-              key={card.id} 
-                  style={{
-                    width: '5cm', // 幅を5cmに固定
-                    // maxWidth削除 - 幅は5cmに固定
-                    backgroundColor: 'white',
-                    borderRadius: '8px',
-                    boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
-                    overflow: 'hidden',
-                    cursor: 'pointer',
-                    transition: 'transform 0.2s, box-shadow 0.2s',
-                    justifySelf: 'center'
+              <div 
+                key={card.id} 
+                style={{
+                  width: '5cm', // 幅を5cmに固定
+                  backgroundColor: 'white',
+                  borderRadius: '8px',
+                  boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
+                  overflow: 'hidden',
+                  cursor: 'pointer',
+                  transition: 'transform 0.2s, box-shadow 0.2s',
+                  justifySelf: 'center'
+                }}
+                onMouseEnter={(e) => {
+                  // @ts-ignore
+                  e.currentTarget.style.transform = 'translateY(-5px)';
+                  // @ts-ignore
+                  e.currentTarget.style.boxShadow = '0 5px 15px rgba(0, 0, 0, 0.2)';
+                }}
+                onMouseLeave={(e) => {
+                  // @ts-ignore
+                  e.currentTarget.style.transform = 'translateY(0)';
+                  // @ts-ignore
+                  e.currentTarget.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.1)';
+                }}
+              >
+                <img 
+                  src={card.src} 
+                  alt={card.alt} 
+                  style={{ 
+                    width: '100%', 
+                    height: '100%',
+                    aspectRatio: '1', // 正方形に設定
+                    objectFit: 'cover'
                   }}
-                  onMouseEnter={(e) => {
-                    // @ts-ignore
-                    e.currentTarget.style.transform = 'translateY(-5px)';
-                    // @ts-ignore
-                    e.currentTarget.style.boxShadow = '0 5px 15px rgba(0, 0, 0, 0.2)';
-                  }}
-                  onMouseLeave={(e) => {
-                    // @ts-ignore
-                    e.currentTarget.style.transform = 'translateY(0)';
-                    // @ts-ignore
-                    e.currentTarget.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.1)';
-                  }}
-            >
-              <img 
-                src={card.src} 
-                alt={card.alt} 
-                    style={{ 
-                      width: '100%', 
-                      height: `${card.height}px`,
-                      objectFit: 'cover'
-                    }}
-                  />
-                  <div style={{ 
-                    padding: '8px',
-                    borderTop: '1px solid #f0f0f0'
-                  }}>
-                    <h3 style={{ 
-                      margin: 0,
-                      fontWeight: 'normal',
-                      color: '#333',
-                      fontSize: '13px',
-                      whiteSpace: 'nowrap',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis'
-                    }}>{card.title}</h3>
+                />
               </div>
-            </div>
-          ))}
+            ))}
         </div>
       </div>
         </div>
