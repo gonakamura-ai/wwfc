@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import dynamic from 'next/dynamic';
 import * as d3 from 'd3';
 // @ts-ignore
 import { geoEquirectangular } from 'd3-geo-projection';
@@ -10,6 +11,68 @@ import * as topojson from 'topojson-client';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
 import Draggable from 'react-draggable';
 import Masonry from 'react-masonry-css';
+import { motion } from "framer-motion";
+import type { LatLngExpression } from 'leaflet';
+
+// Leafletのスタイルをクライアントサイドでのみ読み込む
+const LeafletStyles = () => {
+  useEffect(() => {
+    // CSSをdynamic importで読み込む
+    const loadLeafletStyles = async () => {
+      try {
+        await import('leaflet/dist/leaflet.css');
+      } catch (err) {
+        console.error('Failed to load Leaflet styles:', err);
+      }
+    };
+    loadLeafletStyles();
+  }, []);
+  return null;
+};
+
+// Leafletコンポーネントを動的インポート
+const MapContainer = dynamic(
+  () => import('react-leaflet').then((mod) => mod.MapContainer),
+  { ssr: false }
+);
+
+const TileLayer = dynamic(
+  () => import('react-leaflet').then((mod) => mod.TileLayer),
+  { ssr: false }
+);
+
+const Marker = dynamic(
+  () => import('react-leaflet').then((mod) => mod.Marker),
+  { ssr: false }
+);
+
+const Popup = dynamic(
+  () => import('react-leaflet').then((mod) => mod.Popup),
+  { ssr: false }
+);
+
+// MapControlsコンポーネントを動的インポート
+const MapControls = dynamic(
+  () => import('./components/MapControls').then((mod) => mod.default),
+  { ssr: false }
+);
+
+// マーカーアイコンの設定をクライアントサイドでのみ行う
+const setupMarkerIcon = () => {
+  if (typeof window !== 'undefined') {
+    const L = require('leaflet');
+    const defaultIcon = L.icon({
+      iconUrl: '/images/marker-icon.png',
+      iconRetinaUrl: '/images/marker-icon-2x.png',
+      shadowUrl: '/images/marker-shadow.png',
+      iconSize: [25, 41],
+      iconAnchor: [12, 41],
+      popupAnchor: [1, -34],
+      shadowSize: [41, 41]
+    });
+    L.Marker.prototype.options.icon = defaultIcon;
+  }
+};
 
 // カスタムフック: ウィンドウサイズを監視
 const useWindowSize = () => {
@@ -89,7 +152,7 @@ let globalZoomScale: number = 1;
 // 最後のマウス操作時間を追跡
 let lastInteractionTime: number = 0;
 
-// 純粋なクライアントサイドコンポーネントとして地図を分離
+// WorldMapコンポーネントを更新
 const WorldMap = ({ 
   onCountrySelect, 
   pins,
@@ -99,347 +162,75 @@ const WorldMap = ({
   pins: PinData[],
   selectedCountryName: string | null
 }) => {
-  const mapRef = useRef<HTMLDivElement>(null);
-  const [worldData, setWorldData] = useState<any>(null);
-  // ズームレベルを内部で管理
-  const [zoomLevel, setZoomLevel] = useState<number>(globalZoomScale || 1);
-  // データ読み込みエラーの状態
-  const [loadError, setLoadError] = useState<boolean>(false);
+  const [isClient, setIsClient] = useState(false);
 
-  // データの取得
   useEffect(() => {
-    console.log("Fetching map data...");
-    fetch('https://unpkg.com/world-atlas@2.0.2/countries-110m.json')
-      .then(response => {
-        if (!response.ok) {
-          throw new Error(`Network response was not ok: ${response.status}`);
-        }
-        return response.json();
-      })
-      .then(data => {
-        console.log("Map data loaded successfully");
-        setWorldData(data);
-        setLoadError(false);
-      })
-      .catch(err => {
-        console.error("Error loading map data:", err);
-        setLoadError(true);
-      });
+    setIsClient(true);
+    setupMarkerIcon();
   }, []);
 
-  // コンポーネント内でRef作成
-  const mapTransformRef = useRef<any>(null);
-
-  // 地図の描画
-  useEffect(() => {
-    if (loadError) return; // エラーがある場合は描画しない
-    if (!worldData || !mapRef.current) return;
-
-    console.log("Drawing map with zoom level:", zoomLevel);
-    
-    const drawMap = () => {
-      if (!mapRef.current) return;
-      
-      // 既存のSVGをクリア
-      mapRef.current.innerHTML = '';
-      
-      // コンテナのサイズを取得
-      const width = mapRef.current.clientWidth;
-      const height = mapRef.current.clientHeight;
-
-      console.log(`Map container size: ${width}x${height}`);
-
-      // SVG要素を作成
-      const svg = d3.select(mapRef.current)
-        .append("svg")
-        .attr("width", width)
-        .attr("height", height)
-        .attr("viewBox", `0 0 ${width} ${height}`)
-          .attr("preserveAspectRatio", "xMidYMid meet");
-        
-        // メインのグループ要素
-        const g = svg.append("g");
-        
-        // 投影法の設定 - グリーンランドが見えるようにスケールとオフセットを調整
-        const projection = d3.geoEquirectangular()
-          .scale(width / 7) // スケールを小さくしてより広い範囲を表示
-          .center([32, 10]) // 中心をグリーンランド付近に移動
-          .translate([width / 2, height / 2]); // 垂直方向のオフセットを調整
-        
-        // パスジェネレータ
-      const path = d3.geoPath().projection(projection);
-
-      try {
-        // TopoJSONからGeoJSONに変換
-        const countries = topojson.feature(worldData, worldData.objects.countries) as any;
-        
-        // 南極を除外
-        const filteredCountries = countries.features.filter((d: any) => d.id !== "010");
-        
-        // マップ幅を少し広げる（スクロール時の隙間をなくすため）
-        const mapWidth = width * 1.05; // 少し幅を広げる
-        
-        // 横ドラッグでループするための3つの地図を作成（左、中央、右）
-        for (let i = -1; i <= 1; i++) {
-          const countryGroup = g.append("g")
-            .attr("transform", `translate(${i * mapWidth}, 0)`)
-            .attr("class", "countries-group");
-          
-          countryGroup.selectAll("path.country")
-            .data(filteredCountries)
-      .enter()
-      .append("path")
-      .attr("class", "country")
-            .attr("d", path as any)
-            .attr("fill", (d: any) => {
-              // 初期表示時に選択された国があればピンクにする
-              if (selectedCountryName && d.properties && d.properties.name === selectedCountryName) {
-                return "#ffb6c1";
-              }
-              return "#ffffff";
-            })
-            .attr("stroke", "#a6c6f2")
-            .attr("stroke-width", 0.5)
-            .style("cursor", "pointer")
-            .on("click", function(event, d: any) {
-              // イベントのバブリングと既定の動作を停止
-              event.preventDefault();
-              event.stopPropagation();
-              event.stopImmediatePropagation(); // 即時に伝播停止
-              
-              // 現在の変換状態を保存
-              const currentTransform = mapTransformRef.current || globalMapTransform || d3.zoomIdentity;
-              
-              // 全ての国の色をリセット
-              svg.selectAll("path.country").attr("fill", "#ffffff");
-              
-              // クリックした国を強調 (this要素を使用)
-              d3.select(this).attr("fill", "#ffb6c1");
-              
-              // 国の情報を表示
-              if (d.properties && d.properties.name) {
-                onCountrySelect(d.properties.name);
-              }
-              
-              // ここでイベントをキャンセルすることで地図の移動を防止
-              return false;
-            });
-        }
-        
-        // 3セットのピンを描画（左、中央、右）
-        for (let i = -1; i <= 1; i++) {
-          g.append("g")
-            .attr("transform", `translate(${i * mapWidth}, 0)`)
-            .selectAll("circle")
-            .data(pins)
-      .enter()
-            .append("circle")
-            .attr("cx", (d: PinData) => {
-              const [x, _] = projection([d.lon, d.lat]) || [0, 0];
-              return x;
-            })
-            .attr("cy", (d: PinData) => {
-              const [_, y] = projection([d.lon, d.lat]) || [0, 0];
-              return y;
-            })
-            .attr("r", 6)
-            .attr("fill", (d: PinData) => {
-              // 初期表示時に選択された国があればピンク色に
-              if (selectedCountryName && d.name === selectedCountryName) {
-                return "#ff69b4"; // ピンの色を少し強めに
-              }
-              return "pink";
-            })
-            .attr("stroke", "white")
-            .attr("stroke-width", 2)
-            .style("cursor", "pointer")
-            .on("click", function(event, d: PinData) {
-              // イベントのバブリングと既定の動作を停止
-              event.preventDefault();
-              event.stopPropagation();
-              event.stopImmediatePropagation(); // 即時に伝播停止
-              
-              // 現在の変換状態を保存
-              const currentTransform = mapTransformRef.current || globalMapTransform || d3.zoomIdentity;
-              
-              // 全ての国の色をリセット
-              svg.selectAll("path.country").attr("fill", "#ffffff");
-              
-              // すべての国グループ内から該当する国を選択して色を変更
-              svg.selectAll(".countries-group")
-                .selectAll("path.country")
-                .filter((country: any) => {
-                  return country.properties && 
-                         country.properties.name === d.name;
-                })
-                .attr("fill", "#ffb6c1");
-              
-              // 国の情報を表示
-              onCountrySelect(d.name);
-              
-              // ここでイベントをキャンセルすることで地図の移動を防止
-              return false;
-            });
-        }
-        
-        // 無限ループ用のズーム/パン設定
-        const SCROLL_LIMIT = width * 2; // スクロール制限を広げる
-        
-        // 保存された変換状態があれば使用する
-        let initialTransform = mapTransformRef.current || globalMapTransform || d3.zoomIdentity;
-        
-        // 保存されたズームレベルを適用
-        if (globalZoomScale && globalZoomScale > 1) {
-          initialTransform = d3.zoomIdentity.scale(globalZoomScale).translate(initialTransform.x, initialTransform.y);
-        }
-        
-        // 国とピンのクリックイベントが地図を動かさないように設定
-        svg.selectAll("path.country, circle")
-           .on("mousedown", function(event) {
-             // mousedownイベントを停止して地図移動を防止
-             event.stopPropagation();
-             event.preventDefault();
-             event.stopImmediatePropagation();
-           });
-        
-        // ズーム処理
-        const zoom = d3.zoom<SVGSVGElement, unknown>()
-          .scaleExtent([1, 8]) // ズームの範囲を設定
-          .translateExtent([[-SCROLL_LIMIT, 0], [SCROLL_LIMIT, height]]) // 上下の移動を制限、左右は広げる
-          .on("zoom", (event) => {
-            // 現在の変換状態を取得
-            const transform = event.transform;
-            
-            // ズームレベルを更新
-            setZoomLevel(transform.k);
-            
-            // 変換状態をグローバルに保存
-            mapTransformRef.current = transform;
-            globalMapTransform = transform;
-            globalZoomScale = transform.k;
-            
-            // 左右ループのためのスムーズな処理
-            if (transform.x < -mapWidth) {
-              transform.x += mapWidth;
-            } else if (transform.x > mapWidth) {
-              transform.x -= mapWidth;
-            }
-            
-            // 変換を適用
-            g.attr("transform", transform);
-          });
-        
-        // ズーム関数を設定
-        svg.call(zoom as any)
-           // ダブルクリックによる自動ズームを無効化
-           .on("dblclick.zoom", null);
-        
-        // 初期位置を設定
-        if (globalZoomScale && globalZoomScale > 1) {
-          svg.call(zoom.transform as any, initialTransform);
-        } else {
-          g.attr("transform", initialTransform);
-        }
-        
-        console.log("Map drawn successfully with zoom level:", globalZoomScale);
-      } catch (error) {
-        console.error("Error drawing map:", error);
-      }
-    };
-    
-    // 地図を描画（常に実行）
-    drawMap();
-    
-    // リサイズハンドラーを設定 - デバウンス処理を追加
-    let resizeTimer: NodeJS.Timeout;
-    const handleResize = () => {
-      clearTimeout(resizeTimer);
-      resizeTimer = setTimeout(() => {
-        if (mapRef.current) {
-          console.log("Resizing map...");
-          drawMap();
-        }
-      }, 200); // 200ms後に実行
-    };
-    
-    window.addEventListener('resize', handleResize);
-    return () => {
-      window.removeEventListener('resize', handleResize);
-      clearTimeout(resizeTimer); // タイマーをクリア
-    };
-  }, [worldData, pins, onCountrySelect, selectedCountryName, zoomLevel, loadError]);
-  
-  return (
-    <div 
-      ref={mapRef} 
-      style={{
+  if (!isClient) {
+    return (
+      <div style={{
         width: '100%',
-        height: '100%', // 高さを親コンテナに合わせる
-        backgroundColor: '#68a0e8', // 海の色をより鮮やかな青色に変更
-        position: 'relative',
-        overflow: 'hidden',
-        borderRadius: '0',
-        boxShadow: 'none',
+        height: '100%',
+        backgroundColor: '#68a0e8',
         display: 'flex',
+        justifyContent: 'center',
         alignItems: 'center',
-        justifyContent: 'center'
-      }}
-    >
-      {loadError && (
-        <div style={{
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          textAlign: 'center',
-          padding: '20px'
-        }}>
-          <img 
-            src="/images/world-map-error.png" 
-            alt="Map data loading error" 
-            style={{ 
-              maxWidth: '100%', 
-              maxHeight: '200px',
-              marginBottom: '20px' 
-            }}
-          />
-          <div style={{
-            color: 'white',
-            fontSize: '18px',
-            fontWeight: 'bold',
-            marginBottom: '10px'
-          }}>
-            地図データの読み込みに失敗しました
-          </div>
-          <div style={{
-            color: 'white',
-            fontSize: '14px'
-          }}>
-            ネットワーク接続を確認し、ページを再読み込みしてください
-          </div>
-          <button
-            onClick={() => window.location.reload()}
-            style={{
-              marginTop: '20px',
-              padding: '10px 20px',
-              backgroundColor: 'white',
-              border: 'none',
-              borderRadius: '4px',
-              fontWeight: 'bold',
-              cursor: 'pointer'
+        color: 'white',
+        fontSize: '18px'
+      }}>
+        Loading map...
+      </div>
+    );
+  }
+
+  return (
+    <div style={{
+      width: '100%',
+      height: '100%',
+      position: 'relative',
+      backgroundColor: '#68a0e8',
+      borderRadius: '0',
+      overflow: 'hidden'
+    }}>
+      <LeafletStyles />
+      <MapContainer
+        center={[20, 0] as LatLngExpression}
+        zoom={2}
+        style={{ width: '100%', height: '100%' }}
+        minZoom={2}
+        maxZoom={8}
+        scrollWheelZoom={true}
+      >
+        <TileLayer
+          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+        />
+        <MapControls onCountrySelect={onCountrySelect} />
+        
+        {pins.map((pin) => (
+          <Marker
+            key={pin.name}
+            position={[pin.lat, pin.lon] as LatLngExpression}
+            eventHandlers={{
+              click: () => onCountrySelect(pin.name)
             }}
           >
-            再読み込み
-          </button>
-        </div>
-      )}
+            <Popup>{pin.name}</Popup>
+          </Marker>
+        ))}
+      </MapContainer>
     </div>
   );
 };
 
+WorldMap.displayName = "WorldMap";
+
 // ファッション画像のカテゴリー
 const fashionCategories = [
-  "アウター", "Formal", "Sports", "Street", "Outdoor", 
+  "Outer", "Formal", "Sports", "Street", "Outdoor", 
   "Vintage", "Mode", "Gothic", "Lolita", "Hip Hop",
   "Surf", "Military", "Trod", "Minimal", "Esnek",
   "Retro", "Punk", "Rock", "Garry", "Monoton"
@@ -607,6 +398,18 @@ const GlobalStyle = () => (
       box-sizing: border-box;
     }
     
+    /* マソンリーグリッドのスタイル */
+    .my-masonry-grid {
+      display: flex;
+      margin-left: -15px;
+      width: auto;
+    }
+    
+    .my-masonry-grid_column {
+      padding-left: 15px;
+      background-clip: padding-box;
+    }
+    
     ::-webkit-scrollbar {
       width: 8px;
       height: 8px;
@@ -658,6 +461,9 @@ export default function Home() {
   const [navbarActive, setNavbarActive] = useState(false);
   const [animateChart, setAnimateChart] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [isSearchFocused, setIsSearchFocused] = useState(false);
   
   // ウィンドウサイズを取得
   const windowSize = useWindowSize();
@@ -1204,6 +1010,29 @@ export default function Home() {
     );
   }
 
+  // サイドバーのボタンクリックハンドラー
+  const handleSettingsClick = () => {
+    setShowSettings(!showSettings);
+    setShowNotifications(false); // 他のメニューを閉じる
+  };
+
+  const handleNotificationsClick = () => {
+    setShowNotifications(!showNotifications);
+    setShowSettings(false); // 他のメニューを閉じる
+  };
+
+  const handleSearchClick = () => {
+    const searchInput = document.querySelector('input[type="text"]') as HTMLInputElement;
+    if (searchInput) {
+      searchInput.focus();
+    }
+  };
+
+  const handleAccountClick = () => {
+    // アカウントページへの遷移
+    window.location.href = '/account';
+  };
+
   return (
     <div className="app-container" style={{
       display: 'flex',
@@ -1257,34 +1086,27 @@ export default function Home() {
                 color: '#333',
                 cursor: 'pointer',
                 padding: '10px',
-                marginBottom: '25px'
+                marginBottom: '15px' // 25pxから15pxに変更
               }}
             >
               <img src="/images/logo.png" alt="Logo" width="40" height="40" />
             </button>
             
-            {/* コンパスアイコン - ナビゲーション */}
+            {/* サーチアイコン - ナビゲーション */}
             <button 
+              onClick={handleSearchClick}
               style={{
                 background: 'none',
                 border: 'none',
                 color: '#333',
                 cursor: 'pointer',
-                margin: '10px 0',
+                margin: '0 0 15px 0', // marginを上下15pxに統一
                 padding: '8px',
                 borderRadius: '8px',
                 transition: 'background-color 0.2s'
               }}
-              onMouseEnter={(e) => {
-                // @ts-ignore
-                e.currentTarget.style.backgroundColor = '#f0f0f0';
-              }}
-              onMouseLeave={(e) => {
-                // @ts-ignore
-                e.currentTarget.style.backgroundColor = 'transparent';
-              }}
             >
-              <img src="/images/search.png" alt="Navigation" width="30" height="30" />
+              <img src="/images/search.png" alt="Search" width="30" height="30" />
             </button>
             
             {/* プラスアイコン - 新規作成 */}
@@ -1294,18 +1116,10 @@ export default function Home() {
                 border: 'none',
                 color: '#333',
                 cursor: 'pointer',
-                margin: '10px 0',
+                margin: '0 0 15px 0', // marginを上下15pxに統一
                 padding: '8px',
                 borderRadius: '8px',
                 transition: 'background-color 0.2s'
-              }}
-              onMouseEnter={(e) => {
-                // @ts-ignore
-                e.currentTarget.style.backgroundColor = '#f0f0f0';
-              }}
-              onMouseLeave={(e) => {
-                // @ts-ignore
-                e.currentTarget.style.backgroundColor = 'transparent';
               }}
             >
               <img src="/images/plus.png" alt="Create New" width="30" height="30" />
@@ -1313,28 +1127,20 @@ export default function Home() {
             
             {/* ベルアイコン - 通知 */}
             <button 
+              onClick={handleNotificationsClick}
               style={{
                 background: 'none',
                 border: 'none',
                 color: '#333',
                 cursor: 'pointer',
-                margin: '10px 0',
+                margin: '0', // 最後のアイコンなのでbottom marginは不要
                 padding: '8px',
                 borderRadius: '8px',
                 transition: 'background-color 0.2s',
                 position: 'relative'
               }}
-              onMouseEnter={(e) => {
-                // @ts-ignore
-                e.currentTarget.style.backgroundColor = '#f0f0f0';
-              }}
-              onMouseLeave={(e) => {
-                // @ts-ignore
-                e.currentTarget.style.backgroundColor = 'transparent';
-              }}
             >
               <img src="/images/bell.png" alt="Notifications" width="30" height="30" />
-              {/* 通知数表示 */}
               <span style={{
                 position: 'absolute',
                 top: '5px',
@@ -1351,41 +1157,18 @@ export default function Home() {
                 fontWeight: 'bold'
               }}>3</span>
             </button>
-            
-            {/* コメントアイコン - メッセージ */}
-            <button 
-              style={{
-                background: 'none',
-                border: 'none',
-                color: '#333',
-                cursor: 'pointer',
-                margin: '10px 0',
-                padding: '8px',
-                borderRadius: '8px',
-                transition: 'background-color 0.2s'
-              }}
-              onMouseEnter={(e) => {
-                // @ts-ignore
-                e.currentTarget.style.backgroundColor = '#f0f0f0';
-              }}
-              onMouseLeave={(e) => {
-                // @ts-ignore
-                e.currentTarget.style.backgroundColor = 'transparent';
-              }}
-            >
-              <img src="/images/search.png" alt="Messages" width="30" height="30" />
-            </button>
           </div>
           
-          {/* 設定アイコン - 下部固定 */}
+          {/* 下部アイコン群 */}
           <div style={{
             marginTop: 'auto',
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center'
           }}>
-            {/* 設定アイコン - ユーザーアイコンの下に配置 */}
+            {/* アカウントアイコン */}
             <button 
+              onClick={handleAccountClick}
               style={{
                 background: 'none',
                 border: 'none',
@@ -1399,20 +1182,13 @@ export default function Home() {
                 justifyContent: 'center',
                 width: '100%'
               }}
-              onMouseEnter={(e) => {
-                // @ts-ignore
-                e.currentTarget.style.backgroundColor = '#f0f0f0';
-              }}
-              onMouseLeave={(e) => {
-                // @ts-ignore
-                e.currentTarget.style.backgroundColor = 'transparent';
-              }}
             >
-              <img src="/images/settings.png" alt="Settings" width="30" height="30" />
+              <img src="/images/user.png" alt="User" width="30" height="30" />
             </button>
 
-            {/* ユーザーアイコン - 一番下に配置 */}
+            {/* 設定アイコン */}
             <button 
+              onClick={handleSettingsClick}
               style={{
                 background: 'none',
                 border: 'none',
@@ -1425,16 +1201,8 @@ export default function Home() {
                 justifyContent: 'center',
                 width: '100%'
               }}
-              onMouseEnter={(e) => {
-                // @ts-ignore
-                e.currentTarget.style.backgroundColor = '#f0f0f0';
-              }}
-              onMouseLeave={(e) => {
-                // @ts-ignore
-                e.currentTarget.style.backgroundColor = 'transparent';
-              }}
             >
-              <img src="/images/user.png" alt="User" width="30" height="30" />
+              <img src="/images/settings.png" alt="Settings" width="30" height="30" />
             </button>
           </div>
         </div>
@@ -1449,18 +1217,21 @@ export default function Home() {
         }}>
           {/* セクションタイトル - 削除 */}
 
-          {/* 地図コンテナ - マージン追加 */}
+          {/* 地図コンテナ - 位置を上に調整 */}
           <div className="map-container" style={{ 
             position: 'relative', 
-            marginTop: '0px',
+            marginTop: '-75px',
             paddingTop: '0px',
-            height: 'calc(100vh - 30px)', // 高さを調整して検索バーの中央あたりまで表示されるように
+            height: '80vh', // 高さを調整して地図全体が見えるように
             width: '100%',
             borderTop: 'none',
-            backgroundColor: '#68a0e8', // 背景色をより鮮やかな青色に変更
-            marginBottom: '-30px', // 下部マージンをマイナスに設定して検索バーと重なるようにする
-            borderBottom: 'none', // 下部の境界線も削除
-            zIndex: 5 // 検索バーよりも下に表示されるように調整
+            backgroundColor: '#68a0e8',
+            marginBottom: '-30px',
+            borderBottom: 'none',
+            zIndex: 5,
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center'
           }}>
             <WorldMap 
               onCountrySelect={(name: string) => {
@@ -1477,8 +1248,8 @@ export default function Home() {
               >
                 <div style={{
                   position: 'absolute',
-                  top: '30px', // 上部からの距離を調整
-                  left: '30px', // 左からの距離を調整
+                  top: '100px', // 上部からの距離を調整
+                  left: '30px',
                   backgroundColor: 'white',
                   borderRadius: '8px',
                   boxShadow: '0 5px 20px rgba(0, 0, 0, 0.2)',
@@ -1961,9 +1732,9 @@ export default function Home() {
               {/* 検索フォーム */}
               <div style={{
                 position: 'relative',
-                width: '40%', // 幅を40%に制限
+                width: '40%',
                 minWidth: '300px',
-                marginLeft: '10px' // サイドバーから少し離す
+                marginLeft: '10px'
               }}>
                 <input 
                   type="text"
@@ -1972,24 +1743,16 @@ export default function Home() {
                     width: '100%',
                     padding: '12px 20px 12px 45px',
                     fontSize: '14px',
-                    border: '1px solid #e0e0e0',
+                    border: `1px solid ${isSearchFocused ? '#3b82f6' : '#e0e0e0'}`,
                     borderRadius: '30px',
                     outline: 'none',
-                    boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
-                    transition: 'border-color 0.2s, box-shadow 0.2s'
+                    boxShadow: isSearchFocused ? '0 1px 6px rgba(59, 130, 246, 0.3)' : '0 1px 3px rgba(0, 0, 0, 0.1)',
+                    transition: 'all 0.3s ease',
+                    caretColor: '#3b82f6', // カーソルの色を設定
+                    animation: isSearchFocused ? 'caretBlink 1s infinite' : 'none' // カーソル点滅アニメーション
                   }}
-                  onFocus={(e) => {
-                    // @ts-ignore
-                    e.target.style.borderColor = '#3b82f6';
-                    // @ts-ignore
-                    e.target.style.boxShadow = '0 1px 6px rgba(59, 130, 246, 0.3)';
-                  }}
-                  onBlur={(e) => {
-                    // @ts-ignore
-                    e.target.style.borderColor = '#e0e0e0';
-                    // @ts-ignore
-                    e.target.style.boxShadow = '0 1px 3px rgba(0, 0, 0, 0.1)';
-                  }}
+                  onFocus={() => setIsSearchFocused(true)}
+                  onBlur={() => setIsSearchFocused(false)}
                 />
                 {/* 検索アイコン */}
                 <div style={{
@@ -2190,38 +1953,40 @@ export default function Home() {
           <div style={{
             width: '100%',
             backgroundColor: 'white',
-            padding: '20px',
+            padding: '10px',
             borderTop: 'none',
             marginTop: '-30px'
           }}>
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))',
-              gap: '15px',
-              padding: '0 15px'
-            }}>
+            <Masonry
+              breakpointCols={{
+                default: 6, // デフォルトのカラム数を増やす
+                1400: 5,
+                1100: 4,
+                800: 3,
+                500: 2,
+                400: 1
+              }}
+              className="my-masonry-grid"
+              columnClassName="my-masonry-grid_column"
+            >
               {FIXED_IMAGE_CARDS.map(card => (
                 <div 
                   key={card.id} 
                   style={{
-                    backgroundColor: 'white',
-                    borderRadius: '8px',
-                    boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
+                    backgroundColor: 'transparent',
+                    borderRadius: '12px', // 角を丸くする
                     overflow: 'hidden',
                     cursor: 'pointer',
-                    transition: 'transform 0.2s, box-shadow 0.2s'
+                    transition: 'transform 0.2s',
+                    marginBottom: '10px'
                   }}
                   onMouseEnter={(e) => {
                     // @ts-ignore
                     e.currentTarget.style.transform = 'translateY(-5px)';
-                    // @ts-ignore
-                    e.currentTarget.style.boxShadow = '0 5px 15px rgba(0, 0, 0, 0.2)';
                   }}
                   onMouseLeave={(e) => {
                     // @ts-ignore
                     e.currentTarget.style.transform = 'translateY(0)';
-                    // @ts-ignore
-                    e.currentTarget.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.1)';
                   }}
                 >
                   <img 
@@ -2229,14 +1994,15 @@ export default function Home() {
                     alt={card.alt} 
                     style={{ 
                       width: '100%',
-                      aspectRatio: 'auto',
+                      height: 'auto',
                       display: 'block',
-                      objectFit: 'cover'
+                      objectFit: 'contain',
+                      borderRadius: '12px' // 画像自体も角を丸くする
                     }}
                   />
                 </div>
               ))}
-            </div>
+            </Masonry>
           </div>
         </div>
       </div>
