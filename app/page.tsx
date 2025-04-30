@@ -17,15 +17,17 @@ import type { LatLngExpression } from 'leaflet';
 // Leafletのスタイルをクライアントサイドでのみ読み込む
 const LeafletStyles = () => {
   useEffect(() => {
-    // CSSをdynamic importで読み込む
-    const loadLeafletStyles = async () => {
-      try {
-        await import('leaflet/dist/leaflet.css');
-      } catch (err) {
-        console.error('Failed to load Leaflet styles:', err);
-      }
+    // CSSをlinkタグで読み込む
+    const link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+    link.integrity = 'sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=';
+    link.crossOrigin = '';
+    document.head.appendChild(link);
+
+    return () => {
+      document.head.removeChild(link);
     };
-    loadLeafletStyles();
   }, []);
   return null;
 };

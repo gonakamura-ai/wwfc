@@ -1,0 +1,1 @@
+self.__REACT_LOADABLE_MANIFEST='{"app/page.tsx -> ./components/MapControls":{"id":66158,"files":["static/chunks/158.816ab6611accb26c.js"]},"app/page.tsx -> leaflet/dist/leaflet.css":{"id":30666,"files":["static/chunks/666.015ff0bd9212548e.js"]},"app/page.tsx -> react-leaflet":{"id":79036,"files":["static/chunks/36.d10181bedfb9c7bd.js"]}}';
