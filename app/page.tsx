@@ -2146,7 +2146,8 @@ export default function Home() {
                   overflow: 'hidden',
                   cursor: 'pointer',
                   transition: 'transform 0.2s, box-shadow 0.2s',
-                  justifySelf: 'center'
+                  justifySelf: 'center',
+                  aspectRatio: '3/4' // 縦長の比率に変更（4:3）
                 }}
                 onMouseEnter={(e) => {
                   // @ts-ignore
@@ -2167,7 +2168,6 @@ export default function Home() {
                   style={{ 
                     width: '100%', 
                     height: '100%',
-                    aspectRatio: '1', // 正方形に設定
                     objectFit: 'cover'
                   }}
                 />
