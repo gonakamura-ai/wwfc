@@ -2129,18 +2129,15 @@ export default function Home() {
             marginTop: '-30px'
           }}>
             <div style={{
-              display: 'flex',
-              flexWrap: 'wrap',
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))',
               gap: '15px',
-              margin: '0 auto',
-              padding: '0 15px',
-              justifyContent: 'center'
+              padding: '0 15px'
             }}>
               {FIXED_IMAGE_CARDS.map(card => (
                 <div 
                   key={card.id} 
                   style={{
-                    flex: '0 1 300px',
                     backgroundColor: 'white',
                     borderRadius: '8px',
                     boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
@@ -2166,6 +2163,7 @@ export default function Home() {
                     alt={card.alt} 
                     style={{ 
                       width: '100%',
+                      aspectRatio: 'auto',
                       display: 'block',
                       objectFit: 'cover'
                     }}
