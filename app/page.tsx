@@ -587,6 +587,71 @@ const generateImageCards = (): ImageCard[] => {
 // 画像カードを一度だけ生成して使いまわす
 const FIXED_IMAGE_CARDS: ImageCard[] = generateImageCards();
 
+const GlobalStyle = () => (
+  <style jsx global>{`
+    @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700;800;900&display=swap');
+    
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translate(-50%, -40%); }
+      to { opacity: 1; transform: translate(-50%, -50%); }
+    }
+    
+    body {
+      margin: 0;
+      padding: 0;
+      overflow: auto;
+      font-family: Arial, Helvetica, sans-serif;
+    }
+    
+    * {
+      box-sizing: border-box;
+    }
+    
+    ::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+    
+    ::-webkit-scrollbar-track {
+      background: #f1f1f1;
+      border-radius: 10px;
+    }
+    
+    ::-webkit-scrollbar-thumb {
+      background: #888;
+      border-radius: 10px;
+    }
+    
+    ::-webkit-scrollbar-thumb:hover {
+      background: #555;
+    }
+    
+    .no-focus-outline {
+      outline: none !important;
+    }
+    
+    .recharts-sector:focus {
+      outline: none !important;
+    }
+    
+    .recharts-sector:active {
+      outline: none !important;
+    }
+    
+    .recharts-surface:focus {
+      outline: none !important;
+    }
+    
+    .recharts-wrapper {
+      outline: none !important;
+    }
+    
+    *:focus {
+      outline: none !important;
+    }
+  `}</style>
+);
+
 export default function Home() {
   const [selectedCountry, setSelectedCountry] = useState<CountryData | null>(null);
   const [showPopup, setShowPopup] = useState(false);
@@ -1151,8 +1216,9 @@ export default function Home() {
       backgroundColor: '#ffffff',
       fontFamily: 'Arial, Helvetica, sans-serif',
       minHeight: '100vh',
-      border: 'none', // 枠を表示しない
+      border: 'none',
     }}>
+      <GlobalStyle />
       <div className="content-container" style={{
         display: 'flex',
         position: 'relative',
@@ -2174,75 +2240,6 @@ export default function Home() {
           </div>
         </div>
       </div>
-    </div>
-
-      {/* アニメーション用のCSSスタイル */}
-      <style jsx global>{`
-        @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700;800;900&display=swap');
-        
-        @keyframes fadeIn {
-          from { opacity: 0; transform: translate(-50%, -40%); }
-          to { opacity: 1; transform: translate(-50%, -50%); }
-        }
-        
-        body {
-          margin: 0;
-          padding: 0;
-          overflow: auto;
-          font-family: Arial, Helvetica, sans-serif;
-        }
-        
-        * {
-          box-sizing: border-box;
-        }
-        
-        /* スクロールバーのスタイリング */
-        ::-webkit-scrollbar {
-          width: 8px;
-          height: 8px;
-        }
-        
-        ::-webkit-scrollbar-track {
-          background: #f1f1f1;
-          border-radius: 10px;
-        }
-        
-        ::-webkit-scrollbar-thumb {
-          background: #888;
-          border-radius: 10px;
-        }
-        
-        ::-webkit-scrollbar-thumb:hover {
-          background: #555;
-        }
-        
-        /* 円グラフのクリックアウトラインを除去 */
-        .no-focus-outline {
-          outline: none !important;
-        }
-        
-        .recharts-sector:focus {
-          outline: none !important;
-        }
-        
-        .recharts-sector:active {
-          outline: none !important;
-        }
-        
-        .recharts-surface:focus {
-          outline: none !important;
-        }
-        
-        /* Rechartsの要素にfocusが当たらないようにする */
-        .recharts-wrapper {
-          outline: none !important;
-        }
-        
-        /* タブナビゲーション時のフォーカスインジケータも削除 */
-        *:focus {
-          outline: none !important;
-        }
-      `}</style>
     </div>
   );
 } 
