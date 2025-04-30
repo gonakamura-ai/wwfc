@@ -2122,61 +2122,64 @@ export default function Home() {
           {/* 画像ギャラリー */}
           <div style={{
             width: '100%',
-            backgroundColor: 'white', // 完全な白に変更
+            backgroundColor: 'white',
             padding: '20px',
-            borderTop: 'none', // 上部の境界線を削除
-            marginTop: '-30px' // 0pxから-30pxに変更して上に移動
+            borderTop: 'none',
+            marginTop: '-30px'
           }}>
-            {/* マンソリーレイアウト（不均一な高さの画像グリッド） */}
+            {/* マソンリーレイアウト - columns-countを使用して列数を制御 */}
             <div style={{
-              display: 'grid',
-              gridTemplateColumns: `repeat(auto-fill, 5cm)`, // 横幅を5cmに固定
-              gap: '15px',
+              columnCount: 4,
+              columnGap: '15px',
               margin: '0 auto',
-              justifyContent: 'center' // グリッドを中央揃えに
+              padding: '0 15px'
             }}>
               {FIXED_IMAGE_CARDS.map(card => (
-              <div 
-                key={card.id} 
-                style={{
-                  width: '5cm', // 幅を5cmに固定
-                  backgroundColor: 'white',
-                  borderRadius: '8px',
-                  boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
-                  overflow: 'hidden',
-                  cursor: 'pointer',
-                  transition: 'transform 0.2s, box-shadow 0.2s',
-                  justifySelf: 'center',
-                  aspectRatio: '3/4' // 縦長の比率に変更（4:3）
-                }}
-                onMouseEnter={(e) => {
-                  // @ts-ignore
-                  e.currentTarget.style.transform = 'translateY(-5px)';
-                  // @ts-ignore
-                  e.currentTarget.style.boxShadow = '0 5px 15px rgba(0, 0, 0, 0.2)';
-                }}
-                onMouseLeave={(e) => {
-                  // @ts-ignore
-                  e.currentTarget.style.transform = 'translateY(0)';
-                  // @ts-ignore
-                  e.currentTarget.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.1)';
-                }}
-              >
-                <img 
-                  src={card.src} 
-                  alt={card.alt} 
-                  style={{ 
-                    width: '100%', 
-                    height: '100%',
-                    objectFit: 'cover'
+                <div 
+                  key={card.id} 
+                  style={{
+                    width: '100%',
+                    backgroundColor: 'white',
+                    borderRadius: '8px',
+                    boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
+                    overflow: 'hidden',
+                    cursor: 'pointer',
+                    transition: 'transform 0.2s, box-shadow 0.2s',
+                    marginBottom: '15px',
+                    breakInside: 'avoid', // 要素が列をまたがないようにする
+                    WebkitColumnBreakInside: 'avoid', // Safari対応
+                    display: 'inline-block', // インラインブロック要素として表示
+                    width: '100%' // 列幅いっぱいに広げる
                   }}
-                />
-              </div>
-            ))}
+                  onMouseEnter={(e) => {
+                    // @ts-ignore
+                    e.currentTarget.style.transform = 'translateY(-5px)';
+                    // @ts-ignore
+                    e.currentTarget.style.boxShadow = '0 5px 15px rgba(0, 0, 0, 0.2)';
+                  }}
+                  onMouseLeave={(e) => {
+                    // @ts-ignore
+                    e.currentTarget.style.transform = 'translateY(0)';
+                    // @ts-ignore
+                    e.currentTarget.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.1)';
+                  }}
+                >
+                  <img 
+                    src={card.src} 
+                    alt={card.alt} 
+                    style={{ 
+                      width: '100%',
+                      display: 'block',
+                      objectFit: 'cover'
+                    }}
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       </div>
-        </div>
-      </div>
+    </div>
 
       {/* アニメーション用のCSSスタイル */}
       <style jsx global>{`
